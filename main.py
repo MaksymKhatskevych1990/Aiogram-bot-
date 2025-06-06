@@ -18,7 +18,8 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSg9K_pp8GbPzqdAWU0Gh
 
 # 🔄 Функция для получения курса валют
 @dp.message(Command("start"))
-async def send_welcome(message: Message):
+async def send_welcome(message: Message, from_user=None):
+    user = message.from_user.first_name
     async with aiohttp.ClientSession() as session:
         async with session.get(CSV_URL) as resp:
             if resp.status == 200:
@@ -33,7 +34,7 @@ async def send_welcome(message: Message):
                         rates += f"💱 {a}:||         {b}       /   {c}\n"
 
                 reply = (
-                    "👋 Привет! Добро пожаловать в наш крипто-бот.\n\n"  
+                    f"👋 Привет! {user} Добро пожаловать в наш крипто-бот.\n\n"  
                     "📊 Актуальные курсы валют:\n\n" +
                     " Валюта || Покупка || Продажа \n\n"+
                     rates +
