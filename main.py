@@ -53,6 +53,7 @@ def register_all_handlers(dp: Dispatcher):
 
 # 🚀 Запуск бота
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     register_all_handlers(dp)
     await dp.start_polling(bot)
 
