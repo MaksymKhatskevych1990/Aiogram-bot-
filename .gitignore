@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.idea/
 .env
 *.sqlite3
 *.log
