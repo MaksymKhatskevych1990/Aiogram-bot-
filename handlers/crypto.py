@@ -39,7 +39,7 @@ def get_network_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="ERC20"), KeyboardButton(text="TRC20")],
-            [KeyboardButton(text="BEP20"), KeyboardButton(text="Polygon")]
+            [KeyboardButton(text="BEP20")]
         ],
         resize_keyboard=True
     )

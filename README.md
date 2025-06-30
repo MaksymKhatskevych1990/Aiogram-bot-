@@ -17,7 +17,6 @@ Telegram бот для обмена криптовалют и наличных �
 - **TRC20**: Tronscan API (https://tronscan.org/)
 - **ERC20**: Etherscan API
 - **BEP20**: BSCScan API
-- **Polygon**: Etherscan API
 
 ### Процесс проверки:
 1. Пользователь выбирает криптовалюту и сеть
@@ -88,7 +87,6 @@ CryptoChange/
 | TRC20 | USDT, TRX | Tronscan | ✅ |
 | ERC20 | USDT, ETH | Etherscan | ✅ |
 | BEP20 | USDT, BNB | BSCScan | ✅ |
-| Polygon | USDT, MATIC | Etherscan | ✅ |
 
 ## ⚠️ Важные замечания
 

@@ -6,7 +6,7 @@ import aiohttp
 import csv
 import json
 from typing import Optional, Dict, Any
-from config import ETHERSCAN_API_KEY, BSCSCAN_API_KEY
+from config import ETHERSCAN_API_KEY, BSCSCAN_API_KEY, TRONSCAN_API_KEY
 
 from config import logger
 import datetime
@@ -52,10 +52,10 @@ def get_wallet_address(sheet_name: str, network: str) -> str:
         # Здесь должна быть логика получения адреса кошелька из Google Sheets
         # Пока возвращаем заглушку с реальными адресами
         wallet_addresses = {
-            "ERC20": "0x81d413C8e1232e3294a2fcBF747DF6307f52b382",
-            "TRC20": "TRjE1H8dxypKM1NZRdysbs9wo7huR4bdNz",
-            "BEP20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-            "Polygon": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6"
+            "ERC20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+            "TRC20": "TQn9Y2khDD95J42FQtQTdwVVRZQKdXz9Kf",
+            "BEP20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6"
+
         }
         return wallet_addresses.get(network, "Адрес не найден")
     except Exception as e:
@@ -147,7 +147,7 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str, api_key:
                 "module": "proxy",
                 "action": "eth_getTransactionByHash",
                 "txhash": tx_hash,
-                "apikey": api_key
+                "apikey": ETHERSCAN_API_KEY
             }
 
             async with session.get(url, params=params) as response:
@@ -264,12 +264,9 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str) ->
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
-        return await check_ethereum_transaction(tx_hash, target_address, ETHERSCAN_API_KEY)
+        return await check_ethereum_transaction(tx_hash, target_address, ETHERSCAN_API)
     elif network == "BEP20":
         return await check_bsc_transaction(tx_hash, target_address)
-    elif network == "Polygon":
-        # Polygon использует тот же API что и Ethereum
-        return await check_ethereum_transaction(tx_hash, target_address, ETHERSCAN_API_KEY)
     else:
         return {
             "success": False,
