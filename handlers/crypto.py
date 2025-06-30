@@ -3,9 +3,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from google_utils import get_wallet_address, save_transaction_hash, verify_transaction
 import asyncio
 
+from google_utils import get_wallet_address, save_transaction_hash, verify_transaction
+from utils.validators import is_valid_tx_hash
+
+from config import logger
 
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
@@ -105,10 +108,6 @@ async def get_amount(message: types.Message, state: FSMContext):
 async def get_transaction_hash(message: types.Message, state: FSMContext):
     transaction_hash = message.text.strip()
     
-    # Проверяем формат хеша
-    if len(transaction_hash) < 10:
-        await message.answer("❌ Неверный формат хеша транзакции. Попробуйте еще раз.")
-        return
     
     await state.update_data(transaction_hash=transaction_hash)
     
@@ -121,7 +120,13 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     # Получаем данные из состояния
     data = await state.get_data()
     network = data.get('network')
+    logger.info("Получен нетворк: %s", network)
     wallet_address = get_wallet_address("Лист3", network)
+    
+    # Проверяем формат хеша
+    if not is_valid_tx_hash(transaction_hash, network):
+        await message.answer("❌ Неверный формат хеша транзакции. Попробуйте еще раз.")
+        return
     
     # Проверяем транзакцию
     verification_result = await verify_transaction(
@@ -132,6 +137,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     
     if verification_result.get("success"):
         # Транзакция подтверждена
+        await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
         await message.answer(
             "✅ Транзакция подтверждена!\n\n"
             f"📊 Сумма: {verification_result.get('amount', 'N/A')}\n"
@@ -174,6 +180,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
 async def get_contact(message: types.Message, state: FSMContext):
     await state.update_data(contact=message.text)
     data = await state.get_data()
+    # amount_result = data.get("amount_result")
 
     # Обновляем контакт в Google Sheets
     save_transaction_hash(
@@ -181,7 +188,7 @@ async def get_contact(message: types.Message, state: FSMContext):
         data.get('transaction_hash'), 
         data.get('network'), 
         data.get('crypto_currency'), 
-        data.get('amount'), 
+        data.get('amount_result'), 
         message.text
     )
 
@@ -189,7 +196,7 @@ async def get_contact(message: types.Message, state: FSMContext):
     summary = "\n".join([
         f"🪙 Криптовалюта: {data['crypto_currency']}",
         f"🌐 Сеть: {data['network']}",
-        f"💰 Сумма: {data['amount']}",
+        f"💰 Сумма: {data['amount_result']} USDT",
         f"🔍 Хеш транзакции: {data['transaction_hash']}",
         f"📞 Контакт: {data['contact']}"
     ])
