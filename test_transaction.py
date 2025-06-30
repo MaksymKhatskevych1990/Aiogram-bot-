@@ -15,7 +15,7 @@ async def test_tron_transaction():
     print(f"📧 Адрес кошелька: {wallet_address}")
     
     # Тестовый хеш (несуществующий)
-    test_hash = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    test_hash = "c8977b5ee2c45ba1e089a13dd22ea9fdb7947aa9dff7cea78e858d6926cbc8a6"
     
     # Проверяем транзакцию
     result = await verify_transaction(test_hash, "TRC20", wallet_address)
@@ -36,7 +36,7 @@ async def test_ethereum_transaction():
     print(f"📧 Адрес кошелька: {wallet_address}")
     
     # Тестовый хеш (несуществующий)
-    test_hash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    test_hash = "0x137623f1d02708ef35b330d575ed5505a7506d0b73f28ad604618426cdde601d"
     
     # Проверяем транзакцию
     result = await verify_transaction(test_hash, "ERC20", wallet_address)

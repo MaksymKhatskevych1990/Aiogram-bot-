@@ -8,6 +8,11 @@ import json
 from typing import Optional, Dict, Any
 from config import ETHERSCAN_API_KEY, BSCSCAN_API_KEY
 
+from config import logger
+import datetime
+
+from utils.decode_etc20 import decode_erc20_input
+
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
@@ -47,8 +52,8 @@ def get_wallet_address(sheet_name: str, network: str) -> str:
         # Здесь должна быть логика получения адреса кошелька из Google Sheets
         # Пока возвращаем заглушку с реальными адресами
         wallet_addresses = {
-            "ERC20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-            "TRC20": "TQn9Y2khDD95J42FQtQTdwVVRZQKdXz9Kf",
+            "ERC20": "0x81d413C8e1232e3294a2fcBF747DF6307f52b382",
+            "TRC20": "TRjE1H8dxypKM1NZRdysbs9wo7huR4bdNz",
             "BEP20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
             "Polygon": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6"
         }
@@ -75,99 +80,131 @@ async def check_tron_transaction(tx_hash: str, target_address: str) -> Dict[str,
     """
     Проверяет транзакцию в сети TRON через Tronscan API
     """
+    USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+
     try:
         async with aiohttp.ClientSession() as session:
-            # Получаем информацию о транзакции
             url = f"{TRONSCAN_API}/transaction-info"
             params = {"hash": tx_hash}
-            
+
             async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Проверяем статус транзакции
-                    if data.get("confirmed") and data.get("confirmed") == True:
-                        # Проверяем, что транзакция направлена на наш адрес
-                        if data.get("to") == target_address:
-                            return {
-                                "success": True,
-                                "status": "confirmed",
-                                "amount": data.get("amount", 0),
-                                "from": data.get("from", ""),
-                                "to": data.get("to", ""),
-                                "timestamp": data.get("timestamp", 0)
-                            }
-                        else:
-                            return {
-                                "success": False,
-                                "error": "Транзакция направлена на другой адрес"
-                            }
-                    else:
-                        return {
-                            "success": False,
-                            "error": "Транзакция не подтверждена"
-                        }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Ошибка API: {response.status}"
-                    }
+                if response.status != 200:
+                    return {"success": False, "error": f"Ошибка API: {response.status}"}
+
+                data = await response.json()
+
+                if data.get("confirmed") is not True:
+                    return {"success": False, "error": "Транзакция не подтверждена"}
+
+                if data.get("contractRet") != "SUCCESS":
+                    return {"success": False, "error": f"Ошибка исполнения: {data.get('contractRet')}"}
+
+                transfers = data.get("trc20TransferInfo", [])
+                if not transfers:
+                    return {"success": False, "error": "Нет TRC20-переводов в транзакции"}
+
+                transfer = transfers[0]
+                logger.info("Получен transfer: %s", transfer)
+
+                if transfer["to_address"] != target_address:
+                    return {"success": False, "error": "Транзакция направлена на другой адрес"}
+
+
+                """Нужно уточнить что делать если пользователь перевел не USDT, а какой то другой токен"""
+
+                if transfer["contract_address"] != USDT_CONTRACT:
+                    return {"success": False, "error": "Неверный токен. Ожидается USDT (TRC20)"}
+                
+                """------------------------------------------------------------------------------------"""
+
+                raw_value = int(transfer["amount_str"])
+                decimals = int(transfer["decimals"])
+                value = raw_value / 10**decimals
+
+                timestamp = data.get("timestamp", 0)
+                dt = datetime.datetime.fromtimestamp(timestamp / 1000)
+
+                return {
+                    "success": True,
+                    "status": "confirmed",
+                    "amount": value,
+                    "from": transfer.get("from_address", ""),
+                    "to": transfer.get("to_address", ""),
+                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S")
+                }
+
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Ошибка проверки транзакции: {str(e)}"
-        }
+        return {"success": False, "error": f"Ошибка проверки транзакции: {str(e)}"}
 
 async def check_ethereum_transaction(tx_hash: str, target_address: str, api_key: str) -> Dict[str, Any]:
     """
-    Проверяет транзакцию в сети Ethereum через Etherscan API
+    Проверяет ERC20-транзакцию через etherscan API, извлекая to/amount из input.
     """
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"{ETHERSCAN_API}"
+            url = ETHERSCAN_API
             params = {
                 "module": "proxy",
                 "action": "eth_getTransactionByHash",
                 "txhash": tx_hash,
                 "apikey": api_key
             }
-            
+
             async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if data.get("result"):
-                        tx_data = data["result"]
-                        # Проверяем статус транзакции
-                        if tx_data.get("to", "").lower() == target_address.lower():
-                            return {
-                                "success": True,
-                                "status": "confirmed",
-                                "amount": int(tx_data.get("value", "0"), 16),
-                                "from": tx_data.get("from", ""),
-                                "to": tx_data.get("to", ""),
-                                "blockNumber": tx_data.get("blockNumber")
-                            }
-                        else:
-                            return {
-                                "success": False,
-                                "error": "Транзакция направлена на другой адрес"
-                            }
-                    else:
-                        return {
-                            "success": False,
-                            "error": "Транзакция не найдена"
-                        }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Ошибка API: {response.status}"
-                    }
+                if response.status != 200:
+                    return {"success": False, "error": f"Ошибка API: {response.status}"}
+
+                data = await response.json()
+                
+
+                tx_data = data.get("result")
+                block_number = tx_data.get("blockNumber")
+
+
+                logger.info("Получен data ------ ETH: %s", data)
+                if not tx_data:
+                    return {"success": False, "error": "Транзакция не найдена"}
+
+                # Проверка, что это вызов контракта USDT
+                if tx_data.get("to", "").lower() != "0xdac17f958d2ee523a2206206994597c13d831ec7":
+                    return {"success": False, "error": "Это не транзакция USDT"}
+                
+                decoded = decode_erc20_input(tx_data["input"])
+                logger.info("Получен decoded ------ ETH: %s", decoded)
+                if not decoded:
+                    return {"success": False, "error": "Невозможно декодировать входные данные"}
+                logger.info("Получен decoded ------ ETH: %s", decoded["to"].lower())
+                # Сравнение адресов в нижнем регистре
+                if decoded["to"].lower() != target_address.lower():
+                    return {"success": False, "error": "Токены отправлены на другой адрес"}
+                params_block = {
+                    "module": "proxy",
+                    "action": "eth_getBlockByNumber",
+                    "tag": block_number,
+                    "boolean": "true",
+                    "apikey": api_key
+                }
+                async with session.get(ETHERSCAN_API, params=params_block) as resp_block:
+                    block_response = await resp_block.json()
+                    block_data = block_response.get("result")
+                    timestamp = block_data.get("timestamp")  # в hex
+
+                    # Переводим в int
+                    ts_int = int(timestamp, 16)
+                    dt = datetime.datetime.fromtimestamp(ts_int / 1000)
+                return {
+                    "success": True,
+                    "status": "confirmed",
+                    "amount_raw": decoded["amount"],
+                    "amount": decoded["amount"] / 10**6,  # USDT имеет 6 знаков
+                    "from": tx_data.get("from", ""),
+                    "to": decoded["to"],
+                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S")
+                }
+
+
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Ошибка проверки транзакции: {str(e)}"
-        }
+        return {"success": False, "error": f"Ошибка: {str(e)}"}
 
 async def check_bsc_transaction(tx_hash: str, target_address: str) -> Dict[str, Any]:
     """
