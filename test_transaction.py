@@ -15,7 +15,8 @@ async def test_tron_transaction():
     print(f"📧 Адрес кошелька: {wallet_address}")
     
     # Тестовый хеш (несуществующий)
-    test_hash = "c8977b5ee2c45ba1e089a13dd22ea9fdb7947aa9dff7cea78e858d6926cbc8a6"
+    test_hash = "f5d8e9c1b2a3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9"
+
     
     # Проверяем транзакцию
     result = await verify_transaction(test_hash, "TRC20", wallet_address)
@@ -36,10 +37,32 @@ async def test_ethereum_transaction():
     print(f"📧 Адрес кошелька: {wallet_address}")
     
     # Тестовый хеш (несуществующий)
-    test_hash = "0x137623f1d02708ef35b330d575ed5505a7506d0b73f28ad604618426cdde601d"
+    test_hash = "0x125d640e70d17b217c071b0c79c6ecd2fd8c70c371fec9355fc16fba9c7ddc3b"
+
     
     # Проверяем транзакцию
     result = await verify_transaction(test_hash, "ERC20", wallet_address)
+    
+    print(f"🔍 Результат проверки: {result}")
+    
+    if result.get("success"):
+        print("✅ Транзакция подтверждена!")
+    else:
+        print(f"❌ Ошибка: {result.get('error')}")
+
+async def test_bep20_transaction():
+    """Тест проверки BEP20 транзакции"""
+    print("\n🧪 Тестирование BEP20 транзакции...")
+    
+    # Получаем адрес кошелька
+    wallet_address = get_wallet_address("Лист3", "BEP20")
+    print(f"📧 Адрес кошелька: {wallet_address}")
+    
+    # Тестовый хеш (несуществующий)
+    test_hash = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+    
+    # Проверяем транзакцию
+    result = await verify_transaction(test_hash, "BEP20", wallet_address)
     
     print(f"🔍 Результат проверки: {result}")
     
@@ -52,7 +75,7 @@ async def test_wallet_addresses():
     """Тест получения адресов кошельков"""
     print("\n🧪 Тестирование получения адресов кошельков...")
     
-    networks = ["TRC20", "ERC20", "BEP20", "Polygon"]
+    networks = ["TRC20", "ERC20", "BEP20"]
     
     for network in networks:
         address = get_wallet_address("Лист3", network)
@@ -68,6 +91,7 @@ async def main():
     # Тестируем проверку транзакций
     await test_tron_transaction()
     await test_ethereum_transaction()
+    await test_bep20_transaction()
     
     print("\n✅ Тестирование завершено!")
 
