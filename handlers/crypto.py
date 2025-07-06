@@ -13,33 +13,18 @@ from config import logger
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
 class CryptoFSM(StatesGroup):
-    crypto_currency = State()
     network = State()
     amount = State()
-    transaction_hash = State()  # Новое состояние для хеша транзакции
+    transaction_hash = State()
     contact = State()
-    verification = State()  # Новое состояние для проверки
-
-
-# Клавиатура выбора криптовалюты
-def get_crypto_currency_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="BTC"), KeyboardButton(text="ETH"), KeyboardButton(text="USDT")],
-            [KeyboardButton(text="BNB"), KeyboardButton(text="XRP"), KeyboardButton(text="DOGE")],
-            [KeyboardButton(text="ADA"), KeyboardButton(text="SOL"), KeyboardButton(text="TRX")],
-            [KeyboardButton(text="🔍 Ввести вручную")]
-        ],
-        resize_keyboard=True
-    )
+    verification = State()
 
 
 # Клавиатура выбора сети
 def get_network_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="ERC20"), KeyboardButton(text="TRC20")],
-            [KeyboardButton(text="BEP20")]
+            [KeyboardButton(text="ERC20"), KeyboardButton(text="TRC20"), KeyboardButton(text="BEP20")]            
         ],
         resize_keyboard=True
     )
@@ -47,30 +32,18 @@ def get_network_keyboard():
 
 # Команда /crypto
 async def start_crypto(message: types.Message, state: FSMContext):
-    await message.answer("Выберите криптовалюту:", reply_markup=get_crypto_currency_keyboard())
-    await state.set_state(CryptoFSM.crypto_currency)
-
-
-# Выбор криптовалюты
-async def get_crypto_currency(message: types.Message, state: FSMContext):
-    await state.update_data(crypto_currency=message.text)
-    if message.text == "🔍 Ввести вручную":
-        await message.answer("Введите название криптовалюты вручную:")
-        return
-    await message.answer("Теперь выберите сеть:", reply_markup=get_network_keyboard())
+    await message.answer("Выберите сеть для USDT:", reply_markup=get_network_keyboard())
     await state.set_state(CryptoFSM.network)
 
 
 # Выбор сети
 async def get_network(message: types.Message, state: FSMContext):
     await state.update_data(network=message.text)
-    
-    # Получаем адрес кошелька из Google Sheets
-    wallet_address = get_wallet_address("Лист3", message.text)
-    
+    wallet_address = get_wallet_address(message.text)
+    await state.update_data(wallet_address=wallet_address)
     if wallet_address:
         await message.answer(
-            f"💳 Отправьте криптовалюту на следующий адрес:\n\n"
+            f"💳 Отправьте USDT на следующий адрес:\n\n"
             f"`{wallet_address}`\n\n"
             f"🌐 Сеть: {message.text}\n"
             f"⚠️ Убедитесь, что выбрали правильную сеть!",
@@ -80,7 +53,6 @@ async def get_network(message: types.Message, state: FSMContext):
         await message.answer(
             "⚠️ Ошибка получения адреса кошелька. Пожалуйста, попробуйте позже."
         )
-    
     await message.answer("💰 Введите сумму:")
     await state.set_state(CryptoFSM.amount)
 
@@ -121,7 +93,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     data = await state.get_data()
     network = data.get('network')
     logger.info("Получен нетворк: %s", network)
-    wallet_address = get_wallet_address("Лист3", network)
+    wallet_address = get_wallet_address(message.text)
     
     # Проверяем формат хеша
     if not is_valid_tx_hash(transaction_hash, network):
@@ -148,12 +120,10 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
         
         # Сохраняем успешную транзакцию в Google Sheets
         save_transaction_hash(
-            "Лист4", 
-            transaction_hash, 
-            network, 
-            data.get('crypto_currency'), 
-            data.get('amount'), 
-            "PENDING"  # Контакт пока не указан
+            message.from_user.username or str(message.from_user.id),
+            transaction_hash,
+            wallet_address,
+            "PENDING"
         )
         
         await state.set_state(CryptoFSM.contact)
@@ -180,40 +150,32 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
 async def get_contact(message: types.Message, state: FSMContext):
     await state.update_data(contact=message.text)
     data = await state.get_data()
-    # amount_result = data.get("amount_result")
-
-    # Обновляем контакт в Google Sheets
-    save_transaction_hash(
-        "Лист4", 
-        data.get('transaction_hash'), 
-        data.get('network'), 
-        data.get('crypto_currency'), 
-        data.get('amount_result'), 
-        message.text
-    )
-
-    # Форматируем данные для отображения
+    # Формируем заявку для админа
     summary = "\n".join([
-        f"🪙 Криптовалюта: {data['crypto_currency']}",
-        f"🌐 Сеть: {data['network']}",
-        f"💰 Сумма: {data['amount_result']} USDT",
-        f"🔍 Хеш транзакции: {data['transaction_hash']}",
-        f"📞 Контакт: {data['contact']}"
+        "Новая заявка на обмен USDT:",
+        f"Валюта: USDT",
+        f"Сумма: {data.get('amount_result', data.get('amount', 'N/A'))}",
+        f"Сеть: {data['network']}",
+        f"Адрес кошелька: {data['wallet_address']}",
+        f"Хеш транзакции: {data['transaction_hash']}",
+        f"Контакт: {data['contact']}",
+        f"Telegram: @{message.from_user.username if message.from_user.username else 'N/A'}"
     ])
-    
+    # Отправка админу
+    from config import ADMIN_CHAT_ID
+    await message.bot.send_message(ADMIN_CHAT_ID, summary)
+    # Ответ клиенту
     await message.answer(
         f"✅ Заявка на обмен принята!\n\n{summary}\n\n"
         "📞 Оператор свяжется с вами в ближайшее время.\n"
         "⏰ Обычно это занимает 5-15 минут."
     )
-    
     await state.clear()
 
 
 # Регистрация хендлеров
 def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(start_crypto, Command("crypto"))
-    dp.message.register(get_crypto_currency, StateFilter(CryptoFSM.crypto_currency))
     dp.message.register(get_network, StateFilter(CryptoFSM.network))
     dp.message.register(get_amount, StateFilter(CryptoFSM.amount))
     dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
