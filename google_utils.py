@@ -3,6 +3,7 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
+import traceback
 import csv
 import json
 from typing import Optional, Dict, Any
@@ -16,8 +17,7 @@ from utils.decode_etc20 import decode_erc20_input
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        'client_secret.json', scope)  # Укажи свой путь
+    creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open("Название_таблицы").sheet1  # Название как в Google Sheets
     return sheet
@@ -44,37 +44,38 @@ TRONSCAN_API = "https://api.tronscan.org/api"
 ETHERSCAN_API = "https://api.etherscan.io/api"
 BSCSCAN_API = "https://api.bscscan.com/api"
 
-def get_wallet_address(sheet_name: str, network: str) -> str:
+# Настройки количества подтверждений
+TRC20_CONFIRMATIONS = 1
+ERC20_CONFIRMATIONS = 6
+
+def get_wallet_address(network: str) -> str:
     """
-    Получает адрес кошелька для указанной сети из Google Sheets
+    Получает адрес кошелька для указанной сети из Google Sheets (Лист3)
     """
     try:
-        # Здесь должна быть логика получения адреса кошелька из Google Sheets
-        # Пока возвращаем заглушку с реальными адресами
-        wallet_addresses = {
-            "ERC20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-            "TRC20": "TQn9Y2khDD95J42FQtQTdwVVRZQKdXz9Kf",
-            "BEP20": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6"
+        # Подключаемся к Google Sheets
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        client = gspread.authorize(creds)
 
-        }
-        return wallet_addresses.get(network, "Адрес не найден")
+        # Открываем таблицу и лист "Лист3"
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист3')
+
+        # Получаем все строки таблицы
+        records = sheet.get_all_records()
+
+        for row in records:
+            # row['Сеть'] должно совпадать с названием сети
+            if row.get(' Сеть', '').strip().upper() == network.strip().upper():
+                return row.get('Адрес кошелька')
+
+        return None  # Если не нашли сеть
     except Exception as e:
         print(f"Ошибка при получении адреса кошелька: {e}")
+        traceback.print_exc()
         return None
 
-def save_transaction_hash(sheet_name: str, transaction_hash: str, network: str, crypto: str, amount: str, contact: str) -> bool:
-    """
-    Сохраняет хеш транзакции в Google Sheets
-    """
-    try:
-        # Здесь должна быть логика сохранения в Google Sheets
-        # Пока просто возвращаем True
-        print(f"Сохранен хеш транзакции: {transaction_hash}")
-        print(f"Сеть: {network}, Криптовалюта: {crypto}, Сумма: {amount}, Контакт: {contact}")
-        return True
-    except Exception as e:
-        print(f"Ошибка при сохранении хеша транзакции: {e}")
-        return False
 
 async def check_tron_transaction(tx_hash: str, target_address: str) -> Dict[str, Any]:
     """
@@ -96,6 +97,11 @@ async def check_tron_transaction(tx_hash: str, target_address: str) -> Dict[str,
                 if data.get("confirmed") is not True:
                     return {"success": False, "error": "Транзакция не подтверждена"}
 
+                # Проверка количества подтверждений
+                confirmations = data.get("confirmations", 0)
+                if confirmations < TRC20_CONFIRMATIONS:
+                    return {"success": False, "error": f"Недостаточно подтверждений: {confirmations}/{TRC20_CONFIRMATIONS}"}
+
                 if data.get("contractRet") != "SUCCESS":
                     return {"success": False, "error": f"Ошибка исполнения: {data.get('contractRet')}"}
 
@@ -110,10 +116,10 @@ async def check_tron_transaction(tx_hash: str, target_address: str) -> Dict[str,
                     return {"success": False, "error": "Транзакция направлена на другой адрес"}
 
 
-                """Нужно уточнить что делать если пользователь перевел не USDT, а какой то другой токен"""
+                # """Нужно уточнить что делать если пользователь перевел не USDT, а какой то другой токен"""
 
-                if transfer["contract_address"] != USDT_CONTRACT:
-                    return {"success": False, "error": "Неверный токен. Ожидается USDT (TRC20)"}
+                # if transfer["contract_address"] != USDT_CONTRACT:
+                #     return {"success": False, "error": "Неверный токен. Ожидается USDT (TRC20)"}
                 
                 """------------------------------------------------------------------------------------"""
 
@@ -130,7 +136,8 @@ async def check_tron_transaction(tx_hash: str, target_address: str) -> Dict[str,
                     "amount": value,
                     "from": transfer.get("from_address", ""),
                     "to": transfer.get("to_address", ""),
-                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "confirmations": confirmations
                 }
 
     except Exception as e:
@@ -177,6 +184,23 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str, api_key:
                 # Сравнение адресов в нижнем регистре
                 if decoded["to"].lower() != target_address.lower():
                     return {"success": False, "error": "Токены отправлены на другой адрес"}
+                # Проверка количества подтверждений
+                # Получаем текущий номер блока
+                params_latest = {
+                    "module": "proxy",
+                    "action": "eth_blockNumber",
+                    "apikey": api_key
+                }
+                async with session.get(ETHERSCAN_API, params=params_latest) as resp_latest:
+                    latest_block_data = await resp_latest.json()
+                    latest_block_hex = latest_block_data.get("result")
+                    if not latest_block_hex:
+                        return {"success": False, "error": "Не удалось получить номер последнего блока"}
+                    latest_block = int(latest_block_hex, 16)
+                tx_block = int(block_number, 16)
+                confirmations = latest_block - tx_block + 1
+                if confirmations < ERC20_CONFIRMATIONS:
+                    return {"success": False, "error": f"Недостаточно подтверждений: {confirmations}/{ERC20_CONFIRMATIONS}"}
                 params_block = {
                     "module": "proxy",
                     "action": "eth_getBlockByNumber",
@@ -199,7 +223,8 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str, api_key:
                     "amount": decoded["amount"] / 10**6,  # USDT имеет 6 знаков
                     "from": tx_data.get("from", ""),
                     "to": decoded["to"],
-                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "confirmations": confirmations
                 }
 
 
@@ -272,3 +297,31 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str) ->
             "success": False,
             "error": f"Неподдерживаемая сеть: {network}"
         }
+
+
+def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str, status: str) -> bool:
+    try:
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
+
+        row = [
+            user,
+            transaction_hash,
+            wallet_address,
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status
+        ]
+
+        sheet.append_row(row, value_input_option='USER_ENTERED')
+        print(f"✅ Запись добавлена: {row}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении хеша транзакции: {e}")
+        return False
