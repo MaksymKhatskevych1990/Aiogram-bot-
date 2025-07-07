@@ -2,7 +2,7 @@ from aiogram import types, Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.state import StatesGroup, State
-from keyboards import get_language_keyboard
+from keyboards import get_language_keyboard, get_action_keyboard
 from config import CSV_URL
 import aiohttp
 import csv
@@ -10,6 +10,7 @@ import csv
 # Шаги FSM
 class StartFSM(StatesGroup):
     language = State()
+    action = State()  # Новый шаг выбора действия
 
 # Хендлер на /start — только спрашиваем язык
 async def start_command(message: types.Message, state: FSMContext):
@@ -26,7 +27,7 @@ async def set_language(message: types.Message, state: FSMContext):
     
     user_name = message.from_user.first_name
 
-    # Формируем текст на выбранном языке
+    # Формируем текст на выбранном языкеxx
     if "Українська" in language:
         reply = (
             f"👋 Вітаю, {user_name}!\n\n"
@@ -53,7 +54,9 @@ async def set_language(message: types.Message, state: FSMContext):
         )
 
     await message.answer(reply)
-    await state.clear()
+    # После показа курсов — выбор действия
+    await message.answer("Выберите действие:", reply_markup=get_action_keyboard())
+    await state.set_state(StartFSM.action)
 
 # Функция для загрузки курсов
 async def fetch_currency_rates():
@@ -75,7 +78,19 @@ async def fetch_currency_rates():
         print(f"Ошибка при получении курсов валют: {e}")
     return "❌ Ошибка загрузки курсов."
 
+async def choose_action(message: types.Message, state: FSMContext):
+    action = message.text
+    if "наличн" in action:
+        from handlers.cash import start_cash
+        await start_cash(message, state)
+    elif "крипт" in action:
+        from handlers.crypto import start_crypto
+        await start_crypto(message, state)
+    else:
+        await message.answer("Пожалуйста, выберите действие с помощью кнопок.")
+
 # Регистрация хендлеров
 def register_start_handlers(dp: Dispatcher):
     dp.message.register(start_command, Command("start"))
     dp.message.register(set_language, StateFilter(StartFSM.language))
+    dp.message.register(choose_action, StateFilter(StartFSM.action))
