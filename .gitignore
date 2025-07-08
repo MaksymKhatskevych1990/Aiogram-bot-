@@ -3,13 +3,12 @@ __pycache__/
 *.pyo
 *.pyd
 .idea/
-.env
-*.sqlite3
-*.log
 venv/
 config.py
-client_secret_317694747647-tf1drt9g8v1s6p07t1d94jen11qa85ud.apps.googleusercontent.com.json
+client_secret_317694747647-tf1drt9g8v1s6p07t1d94jen11qa85ud.apps.googleusercon
+.env
+*.sqlite3
+*.logtent.com.json
 client_secret_*.json
 service_account.json
 client_secret.json
-.json/
