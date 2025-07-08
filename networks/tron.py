@@ -2,6 +2,7 @@ import aiohttp
 import datetime
 from config import TRONSCAN_API, TRC20_CONFIRMATIONS, logger
 
+
 async def check_tron_transaction(tx_hash: str, target_address: str) -> dict:
     USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
     try:
