@@ -8,6 +8,7 @@ import asyncio
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
+from keyboards import get_network_keyboard_with_back, get_back_keyboard
 
 from config import logger
 
@@ -21,24 +22,28 @@ class CryptoFSM(StatesGroup):
     verification = State()
 
 
-# Клавиатура выбора сети
-def get_network_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="ERC20"), KeyboardButton(text="TRC20"), KeyboardButton(text="BEP20")]            
-        ],
-        resize_keyboard=True
-    )
-
-
 # Команда /crypto
 async def start_crypto(message: types.Message, state: FSMContext):
-    await message.answer("Выберите сеть для USDT:", reply_markup=get_network_keyboard())
+    await message.answer("Выберите сеть для USDT:", reply_markup=get_network_keyboard_with_back())
     await state.set_state(CryptoFSM.network)
 
 
 # Выбор сети
 async def get_network(message: types.Message, state: FSMContext):
+    # Обработка кнопки "Назад"
+    if "🔙 Назад" in message.text:
+        await message.answer("Выберите действие:", reply_markup=types.ReplyKeyboardMarkup(
+            keyboard=[
+                [types.KeyboardButton(text="💵 Обмен наличных"), types.KeyboardButton(text="💸 Обмен крипты")],
+                [types.KeyboardButton(text="🔙 Назад")]
+            ],
+            resize_keyboard=True
+        ))
+        # Возвращаемся к состоянию выбора действия
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     await state.update_data(network=message.text)
     wallet_address = get_wallet_address(message.text)
     await state.update_data(wallet_address=wallet_address)
@@ -54,12 +59,18 @@ async def get_network(message: types.Message, state: FSMContext):
         await message.answer(
             "⚠️ Ошибка получения адреса кошелька. Пожалуйста, попробуйте позже."
         )
-    await message.answer("💰 Введите сумму:")
+    await message.answer("💰 Введите сумму:", reply_markup=get_back_keyboard())
     await state.set_state(CryptoFSM.amount)
 
 
 # Ввод суммы
 async def get_amount(message: types.Message, state: FSMContext):
+    # Обработка кнопки "Назад"
+    if "🔙 Назад" in message.text:
+        await message.answer("Выберите сеть для USDT:", reply_markup=get_network_keyboard_with_back())
+        await state.set_state(CryptoFSM.network)
+        return
+    
     await state.update_data(amount=message.text)
     
     await message.answer(
@@ -71,7 +82,8 @@ async def get_amount(message: types.Message, state: FSMContext):
     
     await message.answer(
         "🔍 После отправки криптовалюты, пожалуйста, введите хеш транзакции:\n\n"
-        "💡 Хеш транзакции можно найти в вашем кошельке или на сайте блокчейн-эксплорера"
+        "💡 Хеш транзакции можно найти в вашем кошельке или на сайте блокчейн-эксплорера",
+        reply_markup=get_back_keyboard()
     )
     
     await state.set_state(CryptoFSM.transaction_hash)
@@ -79,6 +91,12 @@ async def get_amount(message: types.Message, state: FSMContext):
 
 # Обработка хеша транзакции
 async def get_transaction_hash(message: types.Message, state: FSMContext):
+    # Обработка кнопки "Назад"
+    if "🔙 Назад" in message.text:
+        await message.answer("💰 Введите сумму:", reply_markup=get_back_keyboard())
+        await state.set_state(CryptoFSM.amount)
+        return
+    
     user_input = message.text.strip()
     tx_hash = extract_tx_hash(user_input)
     if not tx_hash:
@@ -120,7 +138,8 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
             f"📊 Сумма: {verification_result.get('amount', 'N/A')}\n"
             f"👤 От: {verification_result.get('from', 'N/A')[:10]}...\n"
             f"📅 Время: {verification_result.get('timestamp', 'N/A')}\n\n"
-            "Теперь укажите ваш контакт для связи (номер телефона или Telegram)."
+            "Теперь укажите ваш контакт для связи (номер телефона или Telegram).",
+            reply_markup=get_back_keyboard()
         )
         
         # Сохраняем успешную транзакцию в Google Sheets
@@ -144,7 +163,8 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
             "• Неверный хеш транзакции\n"
             "• Транзакция отправлена на другой адрес\n"
             "• Проблемы с сетью\n\n"
-            "Попробуйте еще раз или обратитесь в поддержку."
+            "Попробуйте еще раз или обратитесь в поддержку.",
+            reply_markup=get_back_keyboard()
         )
         
         # Возвращаемся к вводу хеша
@@ -153,6 +173,16 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
 
 # Ввод контакта
 async def get_contact(message: types.Message, state: FSMContext):
+    # Обработка кнопки "Назад"
+    if "🔙 Назад" in message.text:
+        await message.answer(
+            "🔍 После отправки криптовалюты, пожалуйста, введите хеш транзакции:\n\n"
+            "💡 Хеш транзакции можно найти в вашем кошельке или на сайте блокчейн-эксплорера",
+            reply_markup=get_back_keyboard()
+        )
+        await state.set_state(CryptoFSM.transaction_hash)
+        return
+    
     await state.update_data(contact=message.text)
     data = await state.get_data()
     # Формируем заявку для админа
