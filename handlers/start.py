@@ -80,6 +80,13 @@ async def fetch_currency_rates():
 
 async def choose_action(message: types.Message, state: FSMContext):
     action = message.text
+    
+    # Обработка кнопки "Назад"
+    if "🔙 Назад" in action:
+        await message.answer("👋 Привет! Пожалуйста, выберите язык:", reply_markup=get_language_keyboard())
+        await state.set_state(StartFSM.language)
+        return
+    
     if "наличн" in action:
         from handlers.cash import start_cash
         await start_cash(message, state)
