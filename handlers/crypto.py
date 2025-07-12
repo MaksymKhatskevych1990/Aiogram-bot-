@@ -7,6 +7,7 @@ import asyncio
 
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction
 from utils.validators import is_valid_tx_hash
+from utils.extract_hash_in_url import extract_tx_hash
 
 from config import logger
 
@@ -78,10 +79,14 @@ async def get_amount(message: types.Message, state: FSMContext):
 
 # Обработка хеша транзакции
 async def get_transaction_hash(message: types.Message, state: FSMContext):
-    transaction_hash = message.text.strip()
+    user_input = message.text.strip()
+    tx_hash = extract_tx_hash(user_input)
+    if not tx_hash:
+        await message.answer("❌ Введите корректный хеш или ссылку на транзакцию.")
+        return
     
     
-    await state.update_data(transaction_hash=transaction_hash)
+    await state.update_data(transaction_hash=tx_hash)
     
     # Показываем сообщение о начале проверки
     await message.answer(
@@ -96,13 +101,13 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     wallet_address = get_wallet_address(network)
     
     # Проверяем формат хеша
-    if not is_valid_tx_hash(transaction_hash, network):
+    if not is_valid_tx_hash(tx_hash, network):
         await message.answer("❌ Неверный формат хеша транзакции. Попробуйте еще раз.")
         return
     
     # Проверяем транзакцию
     verification_result = await verify_transaction(
-        transaction_hash, 
+        tx_hash, 
         network, 
         wallet_address
     )
@@ -121,7 +126,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
         # Сохраняем успешную транзакцию в Google Sheets
         save_transaction_hash(
             message.from_user.username or str(message.from_user.id),
-            transaction_hash,
+            tx_hash,
             wallet_address,
             "PENDING"
         )
