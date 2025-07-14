@@ -9,6 +9,7 @@ from google_utils import get_wallet_address, save_transaction_hash, verify_trans
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
 from keyboards import get_network_keyboard_with_back, get_back_keyboard
+from utils.generate_qr_code import generate_wallet_qr
 
 from config import logger
 
@@ -48,6 +49,7 @@ async def get_network(message: types.Message, state: FSMContext):
     wallet_address = get_wallet_address(message.text)
     await state.update_data(wallet_address=wallet_address)
     if wallet_address:
+        logo_path = "./img/logo.png"
         await message.answer(
             f"💳 Отправьте USDT на следующий адрес:\n\n"
             f"`{wallet_address}`\n\n"
@@ -55,10 +57,13 @@ async def get_network(message: types.Message, state: FSMContext):
             f"⚠️ Убедитесь, что выбрали правильную сеть!",
             parse_mode="Markdown"
         )
+        # Генерируем и сразу отправляем QR-код
+        await generate_wallet_qr(message.bot, message.chat.id, wallet_address, message.text, logo_path)
     else:
         await message.answer(
             "⚠️ Ошибка получения адреса кошелька. Пожалуйста, попробуйте позже."
         )
+
     await message.answer("💰 Введите сумму:", reply_markup=get_back_keyboard())
     await state.set_state(CryptoFSM.amount)
 
