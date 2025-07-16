@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from keyboards import get_city_keyboard, get_time_keyboard, get_branch_keyboard, get_currency_keyboard_with_back, get_back_keyboard
-
+from localization import get_message
 
 # 💼 Состояния FSM
 class CashFSM(StatesGroup):
@@ -15,130 +15,119 @@ class CashFSM(StatesGroup):
     name = State()
     phone = State()
 
-
 # 🔁 Хендлеры поэтапно
 async def start_cash(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
     await message.answer(
-        "Выберите валюту:",
-        reply_markup=get_currency_keyboard_with_back()
+        get_message("choose_currency", lang),
+        reply_markup=get_currency_keyboard_with_back(lang)
     )
     await state.set_state(CashFSM.currency)
 
-
 async def get_currency(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
     # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        await message.answer("Выберите действие:", reply_markup=types.ReplyKeyboardMarkup(
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
             keyboard=[
-                [types.KeyboardButton(text="💵 Обмен наличных"), types.KeyboardButton(text="💸 Обмен крипты")],
-                [types.KeyboardButton(text="🔙 Назад")]
+                [types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))],
+                [types.KeyboardButton(text=get_message("back", lang))]
             ],
             resize_keyboard=True
         ))
-        # Возвращаемся к состоянию выбора действия
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
-    
     await state.update_data(currency=message.text)
-    await message.answer("Введите сумму:", reply_markup=get_back_keyboard())
+    await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CashFSM.amount)
 
-
 async def get_amount(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
         await message.answer(
-            "Выберите валюту:",
-            reply_markup=get_currency_keyboard_with_back()
+            get_message("choose_currency", lang),
+            reply_markup=get_currency_keyboard_with_back(lang)
         )
         await state.set_state(CashFSM.currency)
         return
-    
     await state.update_data(amount=message.text)
-    await message.answer("Выберите город и отделение:", reply_markup=get_city_keyboard())
+    await message.answer(get_message("choose_city_branch", lang), reply_markup=get_city_keyboard(lang))
     await state.set_state(CashFSM.city)
 
-
 async def get_city(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        await message.answer("Введите сумму:", reply_markup=get_back_keyboard())
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
         await state.set_state(CashFSM.amount)
         return
-    
     await state.update_data(city=message.text)
-    await message.answer("Выберите отделение:", reply_markup=get_branch_keyboard(message.text))
+    await message.answer(get_message("choose_branch", lang) if get_message("choose_branch", lang) else "Выберите отделение:", reply_markup=get_branch_keyboard(message.text, lang))
     await state.set_state(CashFSM.branch)
 
-
 async def get_branch(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        data = await state.get_data()
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
         city = data.get('city', '')
-        await message.answer("Выберите город и отделение:", reply_markup=get_city_keyboard())
+        await message.answer(get_message("choose_city_branch", lang), reply_markup=get_city_keyboard(lang))
         await state.set_state(CashFSM.city)
         return
-    
     await state.update_data(branch=message.text)
-    await message.answer("Выберите удобное время визита:", reply_markup=get_time_keyboard())
+    await message.answer(get_message("choose_time", lang), reply_markup=get_time_keyboard(lang))
     await state.set_state(CashFSM.time)
 
-
 async def get_time(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        data = await state.get_data()
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
         city = data.get('city', '')
-        await message.answer("Выберите отделение:", reply_markup=get_branch_keyboard(city))
+        await message.answer(get_message("choose_branch", lang) if get_message("choose_branch", lang) else "Выберите отделение:", reply_markup=get_branch_keyboard(city, lang))
         await state.set_state(CashFSM.branch)
         return
-    
     await state.update_data(time=message.text)
-    await message.answer("Введите имя:", reply_markup=get_back_keyboard())
+    await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CashFSM.name)
 
-
 async def get_name(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        await message.answer("Выберите удобное время визита:", reply_markup=get_time_keyboard())
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("choose_time", lang), reply_markup=get_time_keyboard(lang))
         await state.set_state(CashFSM.time)
         return
-    
     await state.update_data(name=message.text)
-    await message.answer("Введите номер телефона:", reply_markup=get_back_keyboard())
+    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CashFSM.phone)
 
-
 async def get_phone(message: types.Message, state: FSMContext):
-    # Обработка кнопки "Назад"
-    if "🔙 Назад" in message.text:
-        await message.answer("Введите имя:", reply_markup=get_back_keyboard())
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
         await state.set_state(CashFSM.name)
         return
-    
     await state.update_data(phone=message.text)
     data = await state.get_data()
-    summary = "\n".join([
-        "Новая заявка на внесение наличных:",
-        f"Валюта: {data['currency']}",
-        f"Сумма: {data['amount']}",
-        f"Город: {data['city']}",
-        f"Отделение: {data['branch']}",
-        f"Время визита: {data['time']}",
-        f"Имя клиента: {data['name']}",
-        f"Телефон: {data['phone']}",
-        f"Telegram: @{message.from_user.username if message.from_user.username else 'N/A'}"
-    ])
+    summary = get_message(
+        "cash_request_summary", lang,
+        currency=data['currency'],
+        amount=data['amount'],
+        city=data['city'],
+        branch=data['branch'],
+        time=data['time'],
+        name=data['name'],
+        phone=data['phone'],
+        username=message.from_user.username if message.from_user.username else 'N/A'
+    )
     from config import ADMIN_CHAT_ID
     await message.bot.send_message(ADMIN_CHAT_ID, summary)
-    await message.answer(
-        "Спасибо! Менеджер свяжется с вами в ближайшее время для подтверждения и уточнения деталей."
-    )
+    await message.answer(get_message("cash_request_success", lang))
     await state.clear()
-
 
 # 🔧 Регистрация хендлеров
 def register_cash_handlers(dp: Dispatcher):
