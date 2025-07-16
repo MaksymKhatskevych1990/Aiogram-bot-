@@ -6,6 +6,7 @@ from keyboards import get_language_keyboard, get_action_keyboard
 from config import CSV_URL
 import aiohttp
 import csv
+from localization import get_message
 
 # Шаги FSM
 class StartFSM(StatesGroup):
@@ -14,21 +15,26 @@ class StartFSM(StatesGroup):
 
 # Хендлер на /start — только спрашиваем язык
 async def start_command(message: types.Message, state: FSMContext):
-    await message.answer("👋 Привет! Пожалуйста, выберите язык:", reply_markup=get_language_keyboard())
+    await message.answer(get_message("greeting", "ru"), reply_markup=get_language_keyboard())
     await state.set_state(StartFSM.language)
 
 # Хендлер, который срабатывает, когда пользователь выбрал язык
 async def set_language(message: types.Message, state: FSMContext):
     language = message.text
-    await state.update_data(language=language)
+    # Определяем код языка
+    if "Українська" in language:
+        lang = "ua"
+    elif "English" in language:
+        lang = "en"
+    else:
+        lang = "ru"
+    await state.update_data(language=lang)
 
-    # Загружаем курсы только здесь!
     rates = await fetch_currency_rates()
-    
     user_name = message.from_user.first_name
 
-    # Формируем текст на выбранном языкеxx
-    if "Українська" in language:
+    # Формируем текст на выбранном языке
+    if lang == "ua":
         reply = (
             f"👋 Вітаю, {user_name}!\n\n"
             "📊 Актуальний курс валют:\n\n"
@@ -36,7 +42,7 @@ async def set_language(message: types.Message, state: FSMContext):
             rates +
             "\n🧾 Використовуйте /crypto або /cash для операцій."
         )
-    elif "English" in language:
+    elif lang == "en":
         reply = (
             f"👋 Hello, {user_name}!\n\n"
             "📊 Current exchange rates:\n\n"
@@ -54,8 +60,7 @@ async def set_language(message: types.Message, state: FSMContext):
         )
 
     await message.answer(reply)
-    # После показа курсов — выбор действия
-    await message.answer("Выберите действие:", reply_markup=get_action_keyboard())
+    await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
     await state.set_state(StartFSM.action)
 
 # Функция для загрузки курсов
@@ -76,25 +81,25 @@ async def fetch_currency_rates():
                     return rates
     except Exception as e:
         print(f"Ошибка при получении курсов валют: {e}")
-    return "❌ Ошибка загрузки курсов."
+    return get_message("currency_rates_error", "ru")
 
 async def choose_action(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
     action = message.text
-    
     # Обработка кнопки "Назад"
-    if "🔙 Назад" in action:
-        await message.answer("👋 Привет! Пожалуйста, выберите язык:", reply_markup=get_language_keyboard())
+    if get_message("back", lang) in action:
+        await message.answer(get_message("greeting", lang), reply_markup=get_language_keyboard())
         await state.set_state(StartFSM.language)
         return
-    
-    if "наличн" in action:
+    if get_message("cash_exchange", lang) in action or "наличн" in action:
         from handlers.cash import start_cash
         await start_cash(message, state)
-    elif "крипт" in action:
+    elif get_message("crypto_exchange", lang) in action or "крипт" in action:
         from handlers.crypto import start_crypto
         await start_crypto(message, state)
     else:
-        await message.answer("Пожалуйста, выберите действие с помощью кнопок.")
+        await message.answer(get_message("invalid_action", lang))
 
 # Регистрация хендлеров
 def register_start_handlers(dp: Dispatcher):

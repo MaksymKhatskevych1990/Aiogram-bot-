@@ -3,8 +3,9 @@ import qrcode
 from PIL import Image
 from io import BytesIO
 from aiogram.types import BufferedInputFile
+from localization import get_message
 
-async def generate_wallet_qr(bot, chat_id: int, address: str, network: str, logo_path: str):
+async def generate_wallet_qr(bot, chat_id: int, address: str, network: str, logo_path: str, lang: str = "ru"):
     if network.strip().upper() == 'TRC20':
         qr_data = f"tron:{address}"
     elif network.strip().upper() == 'ERC20':
@@ -41,6 +42,6 @@ async def generate_wallet_qr(bot, chat_id: int, address: str, network: str, logo
     await bot.send_photo(
         chat_id,
         photo=photo_file,
-        caption=f"💳 Адрес получателя:\n`{address}`",
+        caption=get_message("qr_caption", lang, address=address),
         parse_mode="Markdown"
     )
