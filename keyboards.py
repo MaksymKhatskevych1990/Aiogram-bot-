@@ -56,6 +56,14 @@ def get_currency_keyboard_with_back(lang="ru"):
         resize_keyboard=True
     )
 
+def get_start_keyboard(lang="ru"):
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=get_message("start", lang))]
+        ],
+        resize_keyboard=True
+    )
+
 CITY_BRANCHES = {
     "Днепр": ["Гагарина, 12", "Центральная, 1"],
     "Львов": ["Зеленая, 5", "Шевченко, 10"]
