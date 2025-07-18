@@ -173,3 +173,33 @@ def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str,
     except Exception as e:
         print(f"❌ Ошибка при сохранении хеша транзакции: {e}")
         return False
+
+def save_crypto_request_to_sheet(data: dict) -> bool:
+    try:
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем таблицу и выбираем "Лист5"
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист5')
+        
+        row = [
+            data.get('currency', ''),
+            data.get('amount', ''),
+            data.get('network', ''),
+            data.get('wallet_address', ''),
+            data.get('visit_time', ''),
+            data.get('client_name', ''),
+            data.get('phone', ''),
+            data.get('telegram', '')
+        ]
+        
+        sheet.append_row(row, value_input_option='USER_ENTERED')
+        print(f"✅ Заявка добавлена: {row}")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении в Google Sheets: {e}")
+        return False

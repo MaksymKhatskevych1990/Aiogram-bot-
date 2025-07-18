@@ -4,6 +4,11 @@ MESSAGES = {
         "ua": "👋 Вітаю! Будь ласка, оберіть мову:",
         "en": "👋 Hello! Please select a language:"
     },
+    "choose_language": {
+        "ru": "Пожалуйста, выберите язык:",
+        "ua": "Будь ласка, оберіть мову:",
+        "en": "Please select a language:"
+    },
     "choose_action": {
         "ru": "Выберите действие:",
         "ua": "Оберіть дію:",
@@ -164,6 +169,11 @@ MESSAGES = {
         "ua": "💳 Адреса отримувача:\n`{address}`",
         "en": "💳 Recipient address:\n`{address}`"
     },
+    "start": {
+        "ru": "Старт",
+        "en": "Start",
+        "ua": "Старт"
+},
 }
 
 def get_message(key, lang="ru", **kwargs):

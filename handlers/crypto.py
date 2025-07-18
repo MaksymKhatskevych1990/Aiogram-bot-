@@ -5,7 +5,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import asyncio
 
-from google_utils import get_wallet_address, save_transaction_hash, verify_transaction
+from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, save_crypto_request_to_sheet
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
 from keyboards import get_network_keyboard_with_back, get_back_keyboard
@@ -151,6 +151,24 @@ async def get_contact(message: types.Message, state: FSMContext):
     await message.answer(
         get_message("crypto_request_success", lang, summary=summary)
     )
+    print(f"Отправляю сообщение администратору в чат: {ADMIN_CHAT_ID}")
+    # Сохраняем заявку в Google Sheets ДО очистки state!
+    row_data = {
+        'currency': 'USDT',  # по умолчанию
+        'amount': data.get('amount_result', data.get('amount', '')),
+        'network': data.get('network', ''),
+        'wallet_address': data.get('wallet_address', ''),
+        'visit_time': '',  # если нет - оставляем пустым
+        'client_name': '', # если нет - оставляем пустым
+        'phone': data.get('contact', ''),
+        'telegram': message.from_user.username or ''
+    }
+
+    # Пытаемся записать в таблицу
+    success = save_crypto_request_to_sheet(row_data)
+    if not success:
+        await message.answer(get_message("google_sheet_error", lang))
+
     await state.clear()
 
 # Регистрация хендлеров
