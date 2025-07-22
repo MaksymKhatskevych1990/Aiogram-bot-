@@ -83,7 +83,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
         await state.set_state(CryptoFSM.amount)
         return
     user_input = message.text.strip()
-    tx_hash = extract_tx_hash(user_input)
+    tx_hash = extract_tx_hash(user_input) #Проверка хэша на валидность
     if not tx_hash:
         await message.answer(get_message("invalid_tx_hash", lang))
         return
@@ -93,39 +93,40 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     network = data.get('network')
     logger.info("Получен нетворк: %s", network)
     wallet_address = get_wallet_address(network)
-    if not is_valid_tx_hash(tx_hash, network):
+    if not is_valid_tx_hash(tx_hash, network): #еще одна проверка хэша на валидность
         await message.answer(get_message("invalid_tx_format", lang))
         return
     verification_result = await verify_transaction(
         tx_hash, 
         network, 
-        wallet_address
+        wallet_address,
+        message.from_user.username or str(message.from_user.id)        
     )
-    if verification_result.get("success"):
-        await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
-        await message.answer(
-            get_message(
-                "tx_confirmed", lang,
-                amount=verification_result.get('amount', 'N/A'),
-                from_addr=verification_result.get('from', 'N/A')[:10] + '...',
-                timestamp=verification_result.get('timestamp', 'N/A')
-            ),
-            reply_markup=get_back_keyboard(lang)
-        )
-        save_transaction_hash(
-            message.from_user.username or str(message.from_user.id),
-            tx_hash,
-            wallet_address,
-            "PENDING"
-        )
-        await state.set_state(CryptoFSM.contact)
-    else:
-        error_msg = verification_result.get("error", "Неизвестная ошибка")
-        await message.answer(
-            get_message("tx_not_confirmed", lang, error=error_msg),
-            reply_markup=get_back_keyboard(lang)
-        )
-        await state.set_state(CryptoFSM.transaction_hash)
+    # if verification_result.get("success"):
+    #     await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
+    #     await message.answer(
+    #         get_message(
+    #             "tx_confirmed", lang,
+    #             amount=verification_result.get('amount', 'N/A'),
+    #             from_addr=verification_result.get('from', 'N/A')[:10] + '...',
+    #             timestamp=verification_result.get('timestamp', 'N/A')
+    #         ),
+    #         reply_markup=get_back_keyboard(lang)
+    #     )
+    #     save_transaction_hash(
+    #         message.from_user.username or str(message.from_user.id),
+    #         tx_hash,
+    #         wallet_address,
+    #         "PENDING"
+    #     )
+    #     await state.set_state(CryptoFSM.contact)
+    # else:
+    #     error_msg = verification_result.get("error", "Неизвестная ошибка")
+    #     await message.answer(
+    #         get_message("tx_not_confirmed", lang, error=error_msg),
+    #         reply_markup=get_back_keyboard(lang)
+    #     )
+    #     await state.set_state(CryptoFSM.transaction_hash)
 
 # Ввод контакта
 async def get_contact(message: types.Message, state: FSMContext):

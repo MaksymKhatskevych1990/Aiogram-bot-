@@ -20,7 +20,7 @@ from networks.ethereum import check_ethereum_transaction
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open("Название_таблицы").sheet1  # Название как в Google Sheets
     return sheet
@@ -59,7 +59,7 @@ def get_wallet_address(network: str) -> str:
         # Подключаемся к Google Sheets
         scope = ['https://spreadsheets.google.com/feeds',
                  'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
         client = gspread.authorize(creds)
 
         # Открываем таблицу и лист "Лист3"
@@ -130,14 +130,15 @@ async def check_bsc_transaction(tx_hash: str, target_address: str) -> Dict[str, 
             "error": f"Ошибка проверки транзакции: {str(e)}"
         }
 
-async def verify_transaction(tx_hash: str, network: str, target_address: str) -> Dict[str, Any]:
+async def verify_transaction(tx_hash: str, network: str, target_address: str, username: str) -> Dict[str, Any]:
+    from tasks import check_erc20_confirmation_task
     """
     Проверяет транзакцию в зависимости от сети
     """
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
-        return await check_ethereum_transaction(tx_hash, target_address)
+        check_erc20_confirmation_task.delay(tx_hash, target_address, username)
     elif network == "BEP20":
         return await check_bsc_transaction(tx_hash, target_address)
     else:
@@ -153,7 +154,7 @@ def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str,
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
         client = gspread.authorize(creds)
 
         sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
@@ -180,7 +181,7 @@ def save_crypto_request_to_sheet(data: dict) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
         client = gspread.authorize(creds)
         
         # Открываем таблицу и выбираем "Лист5"
@@ -202,4 +203,39 @@ def save_crypto_request_to_sheet(data: dict) -> bool:
         return True
     except Exception as e:
         print(f"❌ Ошибка при сохранении в Google Sheets: {e}")
+        return False
+
+def update_transaction_status(transaction_hash: str, new_status: str) -> bool:
+    try:
+        # Авторизация
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+        client = gspread.authorize(creds)
+
+        # Открываем нужный лист
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
+
+        # Ищем ячейку с transaction_hash
+        cell = sheet.find(transaction_hash)
+
+        if cell:
+            # Допустим, колонка статуса — это 5-я колонка (как в твоей функции)
+            status_cell = sheet.cell(cell.row, 5)
+
+            if status_cell.value != new_status:
+                sheet.update_cell(cell.row, 5, new_status)
+                print(f"✅ Статус обновлен на '{new_status}' для транзакции {transaction_hash}")
+                return True
+            else:
+                print(f"⚠️ Статус уже установлен как '{new_status}'")
+                return False
+        else:
+            print(f"❌ Транзакция {transaction_hash} не найдена")
+            return False
+
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении статуса: {e}")
         return False
