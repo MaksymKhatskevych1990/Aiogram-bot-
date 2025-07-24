@@ -50,7 +50,7 @@ async def get_network(message: types.Message, state: FSMContext):
     wallet_address = get_wallet_address(message.text)
     await state.update_data(wallet_address=wallet_address)
     if wallet_address:
-        logo_path = "./img/logo.png"
+        logo_path = "./img/logo-qr.png"
         await message.answer(
             get_message("send_to_address", lang, wallet_address=wallet_address, network=message.text),
             parse_mode="Markdown"
