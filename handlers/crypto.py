@@ -99,7 +99,8 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     verification_result = await verify_transaction(
         tx_hash, 
         network, 
-        wallet_address
+        wallet_address,
+        message.from_user.username or str(message.from_user.id)
     )
     if verification_result.get("success"):
         await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
