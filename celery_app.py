@@ -13,9 +13,12 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     beat_schedule={
-        "check-pending-every-30s": {  # запускать каждые 30 сек
+        "check-pending-every-30s": {
             "task": "tasks.periodic_check_pending_transactions",
             "schedule": 20.0,
         },
     }
 )
+
+if __name__ == '__main__':
+    celery_app.start()

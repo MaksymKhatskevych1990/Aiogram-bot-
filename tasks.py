@@ -1,4 +1,3 @@
-# tasks.py
 import redis
 import json
 import asyncio
@@ -17,10 +16,14 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
     Разовая проверка транзакции — обновляет статус в Redis
     """
     try:
-        result = asyncio.run(check_ethereum_transaction(tx_hash, target_address))
+        # Создаем новый event loop для асинхронного вызова
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(check_ethereum_transaction(tx_hash, target_address))
+        loop.close()
+        
         key = f"tx:{tx_hash}"
         logger.info("============ETH result: %s", result)
-
 
         save_transaction_hash(
             username,
@@ -59,7 +62,6 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
     except Exception as e:
         logger.error(f"Ошибка проверки {tx_hash}: {e}")
 
-
 @celery_app.task
 def periodic_check_pending_transactions():
     """
@@ -87,13 +89,16 @@ def periodic_check_pending_transactions():
 
             logger.info(f"[BEAT] Проверка транзакции {tx_hash}, текущий статус: {status}")
 
-
             try:
-                # Синхронный вызов асинхронной функции
-                result = asyncio.run(check_ethereum_transaction(tx_hash, target_address))
+                # Создаем новый event loop для асинхронного вызова
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(check_ethereum_transaction(tx_hash, target_address))
+                loop.close()
+                
                 checked += 1
 
-                if result["success"] == True:
+                if result.get("success", False):
                     # ✅ Подтверждена
                     confirmed += 1
                     logger.info(f"[BEAT] Транзакция {tx_hash} подтверждена и перезаписана ✅")
@@ -107,7 +112,7 @@ def periodic_check_pending_transactions():
                 else:
                     # ⏳ Всё ещё pending
                     still_pending += 1
-                    logger.info(f"[BEAT] Транзакция {tx_hash} пока pending ({result.get('error')})")
+                    logger.info(f"[BEAT] Транзакция {tx_hash} пока pending ({result.get('error', 'Unknown error')})")
                     r.hset(key, mapping={
                         "status": "pending",
                         "confirmations": result.get("confirmations", 0),
@@ -128,6 +133,3 @@ def periodic_check_pending_transactions():
     except Exception as e:
         logger.error(f"[BEAT] Ошибка в periodic_check_pending_transactions: {e}")
         return {"error": str(e)}
-
-            
-"""Дальше должна быть логика перезаписи значение статуса в гугл таблицы"""

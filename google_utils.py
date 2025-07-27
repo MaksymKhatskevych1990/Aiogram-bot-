@@ -1,5 +1,3 @@
-# google_utils.py
-
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import aiohttp
@@ -212,7 +210,7 @@ def update_transaction_status(transaction_hash: str, new_status: str) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
         client = gspread.authorize(creds)
 
         # Открываем нужный лист
