@@ -4,12 +4,82 @@ from datetime import datetime, timezone
 from config import ETHERSCAN_API_KEY, ERC20_CONFIRMATIONS, logger
 from utils.decode_etc20 import decode_erc20_input
 
+
+
+async def get_confirmations_by_block(session, block_number_hex: str) -> tuple[int, str | None]:
+
+    if not block_number_hex or not isinstance(block_number_hex, str) or not block_number_hex.startswith("0x"):
+        return 0, "Некорректный blockNumber (None или не hex)"
+    
+    url = "https://api.etherscan.io/api"
+    params_latest = {
+        "module": "proxy",
+        "action": "eth_blockNumber",
+        "apikey": ETHERSCAN_API_KEY
+    }
+    async with session.get(url, params=params_latest) as resp_latest:
+        latest_block_data = await resp_latest.json()
+        latest_block_hex = latest_block_data.get("result")
+        if not latest_block_hex:
+            return 0, "Не удалось получить номер последнего блока"
+        latest_block = int(latest_block_hex, 16)
+
+    tx_block = int(block_number_hex, 16)
+    confirmations = latest_block - tx_block
+    logger.info(f"[BEAT] Количество блоков {confirmations} ----- {latest_block} ---- {tx_block}")
+    return confirmations, None
+
+
+async def check_confirmation_for_pending(tx_hash, block_number_hex):
+    async with aiohttp.ClientSession() as session:
+        url = "https://api.etherscan.io/api"
+        params = {
+            "module": "proxy",
+            "action": "eth_getTransactionByHash",
+            "txhash": tx_hash,
+            "apikey": ETHERSCAN_API_KEY
+        }
+
+        if not block_number_hex:
+            logger.info(f"[BEAT] check_confirmation_for_pending блоков {block_number_hex} ")
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    return {"success": False, "error": f"Ошибка API: {response.status}"}
+
+                data = await response.json()
+                tx_data = data.get("result")
+
+                if not tx_data.get("blockNumber"):
+                    return {"success": False, "error": "Транзакция еще не включена в блок"}
+
+                block_number_hex = tx_data.get("blockNumber")
+
+            await asyncio.sleep(0.6)
+
+        confirmations, error = await get_confirmations_by_block(session, block_number_hex)
+        if error:
+            return {"success": False, "error": error}
+
+        if confirmations >= ERC20_CONFIRMATIONS:
+            return {"success": True, "confirmations": confirmations, "blockNumber": block_number_hex}
+        return {
+            "success": False,
+            "confirmations": confirmations,
+            "error": f"Недостаточно подтверждений: {confirmations}/{ERC20_CONFIRMATIONS}",
+            "blockNumber": block_number_hex
+        }
+
+
 async def check_ethereum_transaction(tx_hash: str, target_address: str) -> dict:
     try:
         url = "https://api.etherscan.io/api"
 
         async with aiohttp.ClientSession() as session:
             # Получаем данные транзакции
+            result_transaction = {
+                    "success": True
+                }
+            
             params = {
                 "module": "proxy",
                 "action": "eth_getTransactionByHash",
@@ -18,13 +88,11 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str) -> dict:
             }
             async with session.get(url, params=params) as response:
                 if response.status != 200:
-                    return {"success": False, "error": f"Ошибка API: {response.status}"}
+                    result_transaction.update({"success": False, "error": f"Ошибка API: {response.status}"})
+                    return result_transaction
+                
                 data = await response.json()
                 tx_data = data.get("result")
-                result_transaction = {
-                    "success": True
-                }
-                # logger.info("+++++++++ ETH data: %s", tx_data)
 
                 if not tx_data:
                     result_transaction.update({"success": False, "error": "Транзакция не найдена"})
@@ -53,30 +121,16 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str) -> dict:
 
             await asyncio.sleep(0.6)  # чтобы не превысить лимит 2 запроса/сек
 
-            # Получаем номер последнего блока
-            params_latest = {
-                "module": "proxy",
-                "action": "eth_blockNumber",
-                "apikey": ETHERSCAN_API_KEY
-            }
-            async with session.get(url, params=params_latest) as resp_latest:
-                latest_block_data = await resp_latest.json()
-                logger.info("+++++++++ETH latest_block_data:-------- %s", latest_block_data)
-                latest_block_hex = latest_block_data.get("result")
-                if not latest_block_hex:
-                    result_transaction.update({"success": False, "error": "Не удалось получить номер последнего блока"})
-                    return result_transaction
-                latest_block = int(latest_block_hex, 16)
 
-            await asyncio.sleep(0.6)
+            logger.info(f"[ethereum] blockNumber {type(tx_data.get("blockNumber"))}  -- {tx_data.get("blockNumber")}")
+            block_number_hex = tx_data.get("blockNumber")
 
-            tx_block = int(tx_data.get("blockNumber"), 16)
-            # logger.info("ETH block_data: %s", confirmations, ERC20_CONFIRMATIONS)
-            confirmations = latest_block - tx_block
+            confirmations, error = await get_confirmations_by_block(session, block_number_hex)
             logger.info("+++++++++ETH latest_block: %s", confirmations < ERC20_CONFIRMATIONS)
             if confirmations < ERC20_CONFIRMATIONS:
                 result_transaction.update({"success": False, "error": f"Недостаточно подтверждений: {confirmations}/{ERC20_CONFIRMATIONS}"})
 
+            await asyncio.sleep(1) 
             # Получаем данные блока для timestamp
             params_block = {
                 "module": "proxy",
@@ -85,14 +139,18 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str) -> dict:
                 "boolean": "true",
                 "apikey": ETHERSCAN_API_KEY
             }
+            logger.info(f"[ethereum] --------------------------------------------------------------------- {params_block}")
             async with session.get(url, params=params_block) as resp_block:
                 block_response = await resp_block.json()
+                
                 block_data = block_response.get("result")
                 # logger.info("ETH block_data: %s", block_data)
-
-                if not isinstance(block_data, dict) or "timestamp" not in block_data:
+                timestamp_hex = block_data.get("timestamp")
+                logger.info(f"[ethereum] timestamp_hex {type(timestamp_hex)}  -- {timestamp_hex}")
+                if not isinstance(block_data, dict) or not isinstance(timestamp_hex, str) or "timestamp" not in block_data:
                     result_transaction.update({"success": False, "error": "Не удалось получить timestamp блока"})
-
+                    return result_transaction
+                
                 ts_int = int(block_data["timestamp"], 16)
                 dt = datetime.fromtimestamp(ts_int, tz=timezone.utc)
 
@@ -103,7 +161,8 @@ async def check_ethereum_transaction(tx_hash: str, target_address: str) -> dict:
                 "from": tx_data.get("from", ""),
                 "to": decoded["to"],
                 "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                "confirmations": confirmations
+                "confirmations": confirmations,
+                "blockNumber": tx_data.get("blockNumber")
             })
             logger.info("E------------------------------------------------TH result_transaction: %s", result_transaction)
             return result_transaction

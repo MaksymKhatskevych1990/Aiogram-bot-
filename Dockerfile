@@ -7,7 +7,7 @@ WORKDIR /app            # Рабочая директория внутри ко�
 
 COPY . .                
 
-RUN pip install celery redis gevent aiohttp gspread oauth2client
+RUN pip install celery redis gevent aiohttp gspread oauth2client aiogram qrcode Pillow
 
 # (Необязательно) Можно добавить CMD, чтобы контейнер не завершался сразу
 CMD ["sleep", "infinity"]

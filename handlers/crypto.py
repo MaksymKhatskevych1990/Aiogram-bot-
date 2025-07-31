@@ -4,6 +4,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import asyncio
+from aiogram import Bot
+
+
 
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, save_crypto_request_to_sheet
 from utils.validators import is_valid_tx_hash
@@ -12,8 +15,9 @@ from keyboards import get_network_keyboard_with_back, get_back_keyboard
 from utils.generate_qr_code import generate_wallet_qr
 from localization import get_message
 
-from config import logger
+from config import logger, TOKEN
 
+bot = Bot(token=TOKEN)
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
 class CryptoFSM(StatesGroup):
@@ -127,6 +131,21 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     #         reply_markup=get_back_keyboard(lang)
     #     )
     #     await state.set_state(CryptoFSM.transaction_hash)
+
+async def send_telegram_notification(username: str, tx_hash: str):
+    """
+    Отправляет уведомление в Telegram пользователю о подтвержденной транзакции
+    """
+    try:
+        message = (
+            f"✅ Ваша транзакция подтверждена!\n\n"
+            f"💳 Хеш: `{tx_hash}`\n"
+            f"Спасибо за использование нашего сервиса!"
+        )
+        await bot.send_message(chat_id=username, text=message, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Ошибка при отправке уведомления в Telegram: {e}")
+
 
 # Ввод контакта
 async def get_contact(message: types.Message, state: FSMContext):

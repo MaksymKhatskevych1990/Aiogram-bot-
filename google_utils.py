@@ -18,7 +18,7 @@ from networks.ethereum import check_ethereum_transaction
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open("Название_таблицы").sheet1  # Название как в Google Sheets
     return sheet
@@ -57,7 +57,7 @@ def get_wallet_address(network: str) -> str:
         # Подключаемся к Google Sheets
         scope = ['https://spreadsheets.google.com/feeds',
                  'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
         client = gspread.authorize(creds)
 
         # Открываем таблицу и лист "Лист3"
@@ -152,7 +152,7 @@ def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str,
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
         client = gspread.authorize(creds)
 
         sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
@@ -179,7 +179,7 @@ def save_crypto_request_to_sheet(data: dict) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('json/service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
         client = gspread.authorize(creds)
         
         # Открываем таблицу и выбираем "Лист5"
