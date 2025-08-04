@@ -132,16 +132,11 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     #     )
     #     await state.set_state(CryptoFSM.transaction_hash)
 
-async def send_telegram_notification(username: str, tx_hash: str):
+async def send_telegram_notification(username: str, message: str):
     """
     Отправляет уведомление в Telegram пользователю о подтвержденной транзакции
     """
-    try:
-        message = (
-            f"✅ Ваша транзакция подтверждена!\n\n"
-            f"💳 Хеш: `{tx_hash}`\n"
-            f"Спасибо за использование нашего сервиса!"
-        )
+    try:        
         await bot.send_message(chat_id=username, text=message, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Ошибка при отправке уведомления в Telegram: {e}")

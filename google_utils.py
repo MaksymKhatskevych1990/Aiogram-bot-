@@ -13,7 +13,6 @@ import datetime
 from utils.decode_etc20 import decode_erc20_input
 
 from networks.tron import check_tron_transaction
-from networks.ethereum import check_ethereum_transaction
 
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
@@ -222,7 +221,7 @@ def update_transaction_status(transaction_hash: str, new_status: str) -> bool:
         if cell:
             # Допустим, колонка статуса — это 5-я колонка (как в твоей функции)
             status_cell = sheet.cell(cell.row, 5)
-
+            logger.info(f"[google_utils] --status_cell-- {status_cell.value != new_status} ----- {status_cell.value} ----- {new_status}")
             if status_cell.value != new_status:
                 sheet.update_cell(cell.row, 5, new_status)
                 print(f"✅ Статус обновлен на '{new_status}' для транзакции {transaction_hash}")
