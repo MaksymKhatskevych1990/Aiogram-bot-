@@ -35,6 +35,42 @@ async def check_in_block(tx_data, tx_hash: str) -> dict:
     
     return {"success": True, "status": "confirmed"}
 
+async def check_timestamp_amoun(session, tx_data) -> dict:  
+    
+    # Получаем текущий блок
+    params_block = {
+                "module": "proxy",
+                "action": "eth_getBlockByNumber",
+                "tag": tx_data.get("blockNumber"),
+                "boolean": "true",
+                "apikey": ETHERSCAN_API_KEY
+            }
+    
+# Получаем данные блока для timestamp            
+    async with session.get("https://api.etherscan.io/api", params=params_block) as resp_block:
+        block_response = await resp_block.json()
+        block_data = block_response.get("result")
+
+        decoded = decode_erc20_input(tx_data["input"])
+        logger.info(f"[ethereum] --decoded-- {decoded} ")
+        if not decoded:
+            return {"success": False, "status": "pending", "error": "Не удалось декодировать данные"}
+        amount = decoded["amount"] / 10**6
+
+        if not isinstance(block_data, dict) or "timestamp" not in block_data:
+            return {"success": False, "status": "pending", "error": "Не удалось получить timestamp блока"}
+
+        ts_int = int(block_data["timestamp"], 16)
+        dt = datetime.fromtimestamp(ts_int, tz=timezone.utc)
+        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        if timestamp and amount:
+            return {"success": True,  "amount": amount, "timestamp": timestamp}
+        else:
+            return {
+                "success": False
+            }
+        
 
 async def check_is_erc20(tx_data, tx_hash: str) -> dict:
     """Проверяет, что это транзакция USDT (ERC-20)"""
@@ -53,12 +89,12 @@ async def check_recipient(tx_data, target_address: str) -> dict:
     decoded = decode_erc20_input(tx_data["input"])
     logger.info(f"[ethereum] --decoded-- {decoded} ")
     if not decoded:
-        return {"success": False, "error": "Не удалось декодировать данные"}
+        return {"success": False, "status": "pending", "error": "Не удалось декодировать данные"}
     logger.info(f"[ethereum] --decoded-- {decoded['to'].lower()} ")
     if decoded["to"].lower() != target_address.lower():
-        return {"success": False, "status": "invalid_recipient", "error": "Пользователь отправил на чужой/неправильный адрес", "amount": decoded["amount"]}
+        return {"success": False, "status": "invalid_recipient", "error": f"Пользователь отправил на чужой/неправильный адрес {decoded['to'].lower()}"}
     
-    return {"success": True, "amount": decoded["amount"]}
+    return {"success": True}
 
 
 async def check_confirmations(session, block_number_hex: str) -> dict:
@@ -84,7 +120,7 @@ async def check_confirmations(session, block_number_hex: str) -> dict:
         confirmations = latest_block - tx_block
         
         if confirmations >= ERC20_CONFIRMATIONS:
-            return {"success": True, "confirmations": confirmations}
+            return {"success": True,  "confirmations": confirmations}
         else:
             return {
                 "success": False,
@@ -92,10 +128,11 @@ async def check_confirmations(session, block_number_hex: str) -> dict:
                 "error": f"Мало подтверждений: {confirmations}/{ERC20_CONFIRMATIONS}",
                 "confirmations": confirmations
             }
-        
+
+
 async def check_transaction_stages(tx_hash: str, target_address: str, stage_set: set) -> dict:
     """Проверяет транзакцию по этапам и возвращает статусы"""
-
+    result_transaction = {}
     
     async with aiohttp.ClientSession() as session:
         response = await fetch_transaction(session, tx_hash)
@@ -107,72 +144,94 @@ async def check_transaction_stages(tx_hash: str, target_address: str, stage_set:
         # Этап 1: Проверка включения в блок
         if "in_block" in stage_set:
             in_block = await check_in_block(tx_data, tx_hash)
+            await asyncio.sleep(1)
             logger.info(f"[ethereum] --in_block-- {in_block} ")
             
-            if not in_block["success"]:
-                stage_set.add("in_block")
-                # result_transaction.update({**in_block})
-                return {"stage": stage_set, **in_block}
-            else:
+            if in_block["success"]:                
                 stage_set.discard("in_block")
+                result_transaction.update({**in_block})
+            else:    
+                result_transaction.update({"stage": stage_set, **in_block})            
+                # return {"stage": stage_set, **in_block}
         
-
-        # Этап 2: Проверка, что это USDT
+        # Этап 4: Проверка получателя
+        if "transfer_params" in stage_set:
+            transfer_params = await check_timestamp_amoun(session, tx_data)
+            await asyncio.sleep(1)
+            logger.info(f"[ethereum] --transfer_params-- {transfer_params} ")
+            if transfer_params["success"]:                
+                stage_set.discard("transfer_params")
+                result_transaction.update({**transfer_params})
+                logger.info(f"[ethereum] --result_transaction-transfer_params- ------- {result_transaction}")  
+            else:
+                result_transaction.update({"stage": stage_set, **transfer_params})
+                # return {"stage": stage_set, **transfer_params}
+        
+        # Этап 3: Проверка, что это USDT
         if "is_erc20" in stage_set:
             is_erc20 = await check_is_erc20(tx_data, tx_hash)
             logger.info(f"[ethereum] --is_erc20-- {is_erc20} ")
-            if not is_erc20["success"]:
-                stage_set.add("is_erc20")
-                # result_transaction.update({**is_erc20})
-                return {"stage": stage_set, **is_erc20}
-            else:
+            if is_erc20["success"]:
                 stage_set.discard("is_erc20")
-        
+                result_transaction.update({**is_erc20})
+                logger.info(f"[ethereum] --result_transaction-is_erc20- ------- {result_transaction}")
+            else:
+                result_transaction.update({"stage": stage_set, **is_erc20})
+                # return {"stage": stage_set, **is_erc20}
 
-        # Этап 3: Проверка получателя
+        # Этап 2: Проверка получателя
         if "recipient" in stage_set:
             recipient = await check_recipient(tx_data, target_address)
             logger.info(f"[ethereum] --recipient-- {recipient} ")
-            if not recipient["success"]:
-                stage_set.add("recipient")
-                # result_transaction.update({"amount": recipient.get("amount", "N/A"), **recipient})
-                return {"stage": stage_set, **recipient}
-            else:
+            if recipient["success"]:                
                 stage_set.discard("recipient")
-        
+                result_transaction.update({**recipient})
+                logger.info(f"[ethereum] --result_transaction-recipient- ------- {result_transaction}")  
+            else:
+                result_transaction.update({"stage": stage_set, **recipient})
+                # return {"stage": stage_set, **recipient}        
 
-        # Этап 4: Проверка подтверждений
+        # Этап 5: Проверка подтверждений
         if "confirmations" in stage_set:
             blockNumber_hex = tx_data.get("blockNumber")
             logger.info(f"[ethereum] --recipient-- {blockNumber_hex}")
             confirmations = await check_confirmations(session, blockNumber_hex)
             await asyncio.sleep(1)
             logger.info(f"[ethereum] --confirmations-- {confirmations} ")
-            if not confirmations["success"]:
-                stage_set.add("confirmations")
-                # result_transaction.update({**confirmations})
-                return {"stage": stage_set, **confirmations}
+            if confirmations["success"]:
+                stage_set.discard("confirmations")        
+                result_transaction.update({**confirmations})   
+                logger.info(f"[ethereum] --result_transaction-confirmations- ------- {result_transaction}")     
             else:
-                stage_set.discard("confirmations")
+                result_transaction.update({"stage": stage_set, **confirmations})
+                # return result_transaction
 
          
-        # result_transaction.update({
-        #     "stage": stage_list                       
-        # })
+        
         
         if len(stage_set) == 0:
-            status = "confirmed"
-            success = True
-            stage_set.add("completed")
+            result_transaction.update({
+                "status": "confirmed",
+                "success": True,
+                "stage": ["completed"]                      
+            })
+        elif {"is_erc20", "recipient"}.issubset(stage_set):
+            stage_list = list(stage_set) 
 
+            result_transaction.update({
+                "status": "invalid_token/invalid_recipient",
+                "stage": stage_list,
+                "success": False                     
+            })
         else:
-            status = "pending"
-            success = False
+            stage_list = list(stage_set) 
+
+            result_transaction.update({
+                "status": "pending",
+                "stage": stage_list,
+                "success": False                     
+            })
             
-        stage_list = list(stage_set)   
-        logger.info(f"[ethereum] --result_transaction-- {stage_list}")
-        return {
-                "status": status,
-                "success": success,
-                "stage": stage_list
-            }
+          
+        logger.info(f"[ethereum] --result_transaction--, ------- {result_transaction}")
+        return result_transaction

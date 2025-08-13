@@ -15,6 +15,7 @@ from threading import Thread
 from celery_app import celery_app
 from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
+from datetime import timedelta
 
 # Redis для хранения статусов транзакций
 r = redis.Redis(host="host.docker.internal", port=6379, db=0, decode_responses=True)
@@ -59,7 +60,7 @@ def run_async_coroutine(coro):
 
 @celery_app.task
 def check_erc20_confirmation_task(tx_hash, target_address, username):
-    stage_set = {"in_block", "is_erc20", "recipient", "confirmations"}
+    stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}
     massege_text = (
         f"✅ Ваша транзакция подтверждена!\n\n"
         f"💳 Хеш: `{tx_hash}`\n"
@@ -68,14 +69,16 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
 
     try:
         result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
-        
+        logger.info(f"[tasks] -check_erc20_confirmation_task-result-- {result}")
         key = f"tx:{tx_hash}"
 
         save_transaction_hash(
             username,
             tx_hash,
             target_address,
-            result.get("status", "pending")
+            result.get("timestamp", "N/A"),
+            result.get("status", "pending"),
+            result.get("amount", "N/A")
         )
         stage_str = ",".join(result["stage"])
         
@@ -85,13 +88,14 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
             update_transaction_status(tx_hash, "confirmed")
             r.delete(key)
         else:
+            
             # Сохраняем, на каком этапе ошибка
             r.hset(key, mapping={
                 "username": username,
                 "target_address": target_address,
                 "stage": stage_str,
                 "error": result.get("error", "Unknown error"),
-                "last_check": str(datetime.now())
+                "first_seen": str(datetime.now(timezone.utc))
             })
             
     except Exception as e:
@@ -103,6 +107,8 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
 
 @celery_app.task
 def periodic_check_pending_transactions():
+    MAX_PENDING_DURATION = timedelta(minutes=2)
+
     try:
         keys = r.keys("tx:*")
         
@@ -115,6 +121,7 @@ def periodic_check_pending_transactions():
             tx_hash = key.split(":")[1]
             username = tx_data["username"]
             target_address = tx_data["target_address"]
+            first_seen_str = tx_data.get("first_seen")
 
             failed_stage = stage_list.split(",")
             stage_set = set(failed_stage)
@@ -123,13 +130,16 @@ def periodic_check_pending_transactions():
                 result = None
                 
                 result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+                logger.info(f"[tasks] -periodic_check_pending_transactions-result-- {result}")
                 # Если этап теперь пройден — обновляем Redis
                 # if result and result.get("success"):
              
                 if failed_stage != result["stage"]:
                     stage_str = ",".join(result["stage"])
                     r.hset(key,  mapping={"stage": stage_str})
-
+                if first_seen_str:
+                    first_seen = datetime.fromisoformat(first_seen_str)
+                    logger.info(f"[tasks] --datetime-- {datetime.now(timezone.utc) - first_seen}")
 
                 logger.info(f"[tasks] --result-- {result.get('success') and len(result['stage']) == 1 and result['stage'] == ['completed']} -------   {result['stage']}")
                 if result.get("success") and len(result["stage"]) == 1 and result["stage"] == ["completed"] :
@@ -138,22 +148,29 @@ def periodic_check_pending_transactions():
                         f"💳 Хеш: `{tx_hash}`\n"
                         f"Спасибо за использование нашего сервиса!"
                     )
-                    run_async_coroutine(send_telegram_notification(username, massege_text))
-                    update_transaction_status(tx_hash, "confirmed")
-                    r.delete(key)
                 else:
-                    if "is_erc20" in result["stage"]:
+                    if "invalid_token/invalid_recipient" in result["stage"]:
+                        massege_text = '❗️ Не правильный токен и неправильный адрес'
+                    elif "is_erc20" in result["stage"]:
                         massege_text = '❗️ Вы отправили токен, который не является USDT (ERC-20). Мы не можем обработать этот перевод. Проверьте адрес назначения и используемый токен.'
                     elif "recipient" in result["stage"]:
                         massege_text = '❗️ Ошибка в транзакции: USDT были отправлены на адрес, отличающийся от назначенного вам. Проверьте, чтобы вы использовали именно тот адрес, который был выдан вам для перевода.'
+                    
+                    elif datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
+                        logger.warning(f"[CLEANUP] Удаляем зависшую транзакцию: {key}")
+                        massege_text = (
+                            f"⚠️ Мы не получили подтверждения по вашей транзакции в течение 2 часов.\n\n"
+                            f"Она будет удалена. Если у вас есть вопросы или нужна помощь — обратитесь в нашу поддержку.\n"
+                        )
+                        result["status"] = "expired"
                     else:
                         logger.info(f"[BEAT] Транзакция {tx_hash} пока pending ({result["error"]})")
-                        return
+                        continue  
                     
 
-                    run_async_coroutine(send_telegram_notification(username, massege_text))
-                    update_transaction_status(tx_hash, result["status"])
-                    r.delete(key)
+                run_async_coroutine(send_telegram_notification(username, massege_text))
+                update_transaction_status(tx_hash, result["status"])
+                r.delete(key)
             except Exception as e:
                 logger.error(f"Ошибка при проверке {tx_hash}: {e}")
                 

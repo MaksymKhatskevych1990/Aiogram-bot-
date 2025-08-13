@@ -145,7 +145,7 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
         }
 
 
-def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str, status: str) -> bool:
+def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str, timestamp: str, status: str, amount: str) -> bool:
     try:
         scope = [
             'https://spreadsheets.google.com/feeds',
@@ -160,8 +160,10 @@ def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str,
             user,
             transaction_hash,
             wallet_address,
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            status
+            timestamp,
+            # datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status,
+            amount
         ]
 
         sheet.append_row(row, value_input_option='USER_ENTERED')
