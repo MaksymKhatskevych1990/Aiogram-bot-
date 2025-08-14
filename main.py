@@ -9,10 +9,18 @@ from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
+from utils.channel_rates import ChannelRatesParser
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 google = GOOGLE_API_KEY
+
+# Инициализируем парсер курсов из канала
+channel_rates_parser = ChannelRatesParser(bot, "@obmenvalut13")
+
+# Делаем парсер доступным глобально
+import utils.channel_rates
+utils.channel_rates.channel_rates_parser = channel_rates_parser
 
 
 

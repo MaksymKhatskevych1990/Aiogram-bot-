@@ -164,6 +164,31 @@ MESSAGES = {
         "ua": "📊 Сума: {amount}\n\n⚠️ Актуальний курс недоступний.\nПрипустимо, ви отримаєте ~XXX USD за {amount} монет.\nТочний розрахунок зробить оператор обмінника.",
         "en": "📊 Amount: {amount}\n\n⚠️ Current rate unavailable.\nAssume you will get ~XXX USD for {amount} coins.\nThe exact calculation will be made by the operator."
     },
+    "commission_calculation": {
+        "ru": "💰 *Расчет комиссии*\n\n📊 Сумма: {amount} {currency_from}\n💱 Курс: {rate}\n💸 Комиссия: {commission} {currency_to}\n💰 Итого к получению: {final_amount} {currency_to}\n\n{commission_note}",
+        "ua": "💰 *Розрахунок комісії*\n\n📊 Сума: {amount} {currency_from}\n💱 Курс: {rate}\n💸 Комісія: {commission} {currency_to}\n💰 Разом до отримання: {final_amount} {currency_to}\n\n{commission_note}",
+        "en": "💰 *Commission calculation*\n\n📊 Amount: {amount} {currency_from}\n💱 Rate: {rate}\n💸 Commission: {commission} {currency_to}\n💰 Total to receive: {final_amount} {currency_to}\n\n{commission_note}"
+    },
+    "commission_manager_required": {
+        "ru": "⚠️ *Сумма от 5000 USD - требуется связь с менеджером*",
+        "ua": "⚠️ *Сума від 5000 USD - потрібен зв'язок з менеджером*",
+        "en": "⚠️ *Amount from 5000 USD - manager contact required*"
+    },
+    "commission_percentage": {
+        "ru": "📈 Комиссия: {percentage}% от курса",
+        "ua": "📈 Комісія: {percentage}% від курсу",
+        "en": "📈 Commission: {percentage}% of the rate"
+    },
+    "commission_fixed": {
+        "ru": "💵 Фиксированная комиссия: {amount} USD",
+        "ua": "💵 Фіксована комісія: {amount} USD",
+        "en": "💵 Fixed commission: {amount} USD"
+    },
+    "invalid_amount": {
+        "ru": "❌ Введите корректную сумму больше 0",
+        "ua": "❌ Введіть коректну суму більше 0",
+        "en": "❌ Enter a valid amount greater than 0"
+    },
     "qr_caption": {
         "ru": "💳 Адрес получателя:\n`{address}`",
         "ua": "💳 Адреса отримувача:\n`{address}`",
@@ -174,6 +199,66 @@ MESSAGES = {
         "en": "Start",
         "ua": "Старт"
 },
+    "choose_crypto_operation": {
+        "ru": "Выберите операцию с USDT:",
+        "ua": "Оберіть операцію з USDT:",
+        "en": "Choose USDT operation:"
+    },
+    "choose_cash_operation": {
+        "ru": "Выберите операцию с наличными USD:",
+        "ua": "Оберіть операцію з готівкою USD:",
+        "en": "Choose cash USD operation:"
+    },
+    "crypto_buy_usdt": {
+        "ru": "Купить USDT",
+        "ua": "Купити USDT",
+        "en": "Buy USDT"
+    },
+    "crypto_sell_usdt": {
+        "ru": "Продать USDT",
+        "ua": "Продати USDT",
+        "en": "Sell USDT"
+    },
+    "cash_buy_usd": {
+        "ru": "Купить USD",
+        "ua": "Купити USD",
+        "en": "Buy USD"
+    },
+    "cash_sell_usd": {
+        "ru": "Продать USD",
+        "ua": "Продати USD",
+        "en": "Sell USD"
+    },
+    "enter_client_wallet": {
+        "ru": "Введите адрес вашего кошелька USDT в выбранной сети:",
+        "ua": "Введіть адресу вашого гаманця USDT у вибраній мережі:",
+        "en": "Enter your USDT wallet address in the selected network:"
+    },
+    "cash_withdraw_request_summary": {
+        "ru": "Заявка на выдачу средств:\nВалюта: {currency}\nСумма: {amount}\nГород: {city}\nОтделение: {branch}\nВремя визита: {time}\nИмя клиента: {name}\nТелефон: {phone}\nTelegram: @{username}",
+        "ua": "Заявка на видачу коштів:\nВалюта: {currency}\nСума: {amount}\nМісто: {city}\nВідділення: {branch}\nЧас візиту: {time}\nІм'я клієнта: {name}\nТелефон: {phone}\nTelegram: @{username}",
+        "en": "Cash withdrawal request:\nCurrency: {currency}\nAmount: {amount}\nCity: {city}\nBranch: {branch}\nVisit time: {time}\nClient name: {name}\nPhone: {phone}\nTelegram: @{username}"
+    },
+    "current_rates": {
+        "ru": "Актуальный курс валют",
+        "ua": "Актуальний курс валют",
+        "en": "Current exchange rates"
+    },
+    "rates_header": {
+        "ru": "📊 Актуальные курсы валют:\n\n",
+        "ua": "📊 Актуальні курси валют:\n\n",
+        "en": "📊 Current exchange rates:\n\n"
+    },
+    "rate_format": {
+        "ru": "💱 {pair}: {buy} / {sell} UAH",
+        "ua": "💱 {pair}: {buy} / {sell} UAH",
+        "en": "💱 {pair}: {buy} / {sell} UAH"
+    },
+    "rates_source": {
+        "ru": "\n\n📡 Источник: @obmenvalut13",
+        "ua": "\n\n📡 Джерело: @obmenvalut13",
+        "en": "\n\n📡 Source: @obmenvalut13"
+    },
 }
 
 def get_message(key, lang="ru", **kwargs):

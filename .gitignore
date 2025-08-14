@@ -15,3 +15,14 @@ client_secret.json
 .json/
 test_transaction.py
 test_gspread.py
+CASH_EXCHANGE_SETUP.md
+COMMISSION_SETUP.md
+COMMISSION_USAGE.md
+dump.rdb
+nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
+nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
+promt.txt
+rates_session.session
+nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC
+test_commission.py
+service_account.json

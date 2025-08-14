@@ -5,6 +5,7 @@ from aiogram.fsm.state import StatesGroup, State
 from keyboards import get_language_keyboard, get_action_keyboard, get_start_keyboard
 from config import LOGO_PATH, CSV_URL
 from localization import get_message
+from utils.fiat_rates import get_all_currency_rates
 import aiohttp
 import csv
 
@@ -53,32 +54,21 @@ async def set_language(message: types.Message, state: FSMContext):
 
     await state.update_data(language=lang)
 
-    rates = await fetch_currency_rates()
+
     user_name = message.from_user.first_name
 
     if lang == "ua":
         reply = (
             f"👋 Вітаю, {user_name}!\n\n"
-            "📊 Актуальний курс валют:\n\n"
-            " Валюта || Купівля || Продаж \n\n" +
-            rates +
-            "\n🧾 Використовуйте /crypto або /cash для операцій."
         )
     elif lang == "en":
         reply = (
             f"👋 Hello, {user_name}!\n\n"
-            "📊 Current exchange rates:\n\n"
-            " Currency || Buy || Sell \n\n" +
-            rates +
-            "\n🧾 Use /crypto or /cash for other operations."
         )
     else:
         reply = (
             f"👋 Привет, {user_name}!\n\n"
-            "📊 Актуальные курсы валют:\n\n"
-            " Валюта || Покупка || Продажа \n\n" +
-            rates +
-            "\n🧾 Используйте /crypto или /cash для других операций."
+            
         )
 
     await message.answer(reply)
@@ -103,28 +93,66 @@ async def choose_action(message: types.Message, state: FSMContext):
     elif get_message("crypto_exchange", lang) in action or "крипт" in action:
         from handlers.crypto import start_crypto
         await start_crypto(message, state)
+    elif get_message("current_rates", lang) in action:
+        await show_current_rates(message, state)
     else:
         await message.answer(get_message("invalid_action", lang))
 
-# Получаем курсы валют
-async def fetch_currency_rates():
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(CSV_URL) as resp:
-                if resp.status == 200:
-                    text_data = await resp.text()
-                    reader = csv.reader(text_data.splitlines())
-                    rows = list(reader)
 
-                    rates = ""
-                    for row in rows[1:]:
-                        if len(row) >= 3:
-                            a, b, c = row[0], row[1], row[2]
-                            rates += f"💱 {a}:||         {b}       /   {c}\n"
-                    return rates
+
+
+async def show_current_rates(message: types.Message, state: FSMContext):
+    """Показывает актуальные курсы валют из канала @obmenvalut13"""
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    try:
+        # Получаем курсы валют
+        rates = await get_all_currency_rates()
+        
+        if not rates:
+            await message.answer(get_message("currency_rates_error", lang))
+            return
+        
+        # Формируем сообщение с курсами
+        rates_text = get_message("rates_header", lang)
+        
+        # Добавляем курсы для каждой валютной пары
+        currency_pairs = {
+            'USD-UAH': 'USD',
+            'EUR-UAH': 'EUR', 
+            'GBP-UAH': 'GBP',
+            'PLN-UAH': 'PLN'
+        }
+        
+        for pair_key, currency in currency_pairs.items():
+            if pair_key in rates:
+                rate_data = rates[pair_key]
+                rates_text += get_message("rate_format", lang).format(
+                    pair=currency,
+                    buy=f"{rate_data['buy']:.2f}",
+                    sell=f"{rate_data['sell']:.2f}"
+                ) + "\n"
+            elif currency in rates:
+                rate_data = rates[currency]
+                rates_text += get_message("rate_format", lang).format(
+                    pair=currency,
+                    buy=f"{rate_data['buy']:.2f}",
+                    sell=f"{rate_data['sell']:.2f}"
+                ) + "\n"
+        
+        # Добавляем источник
+        rates_text += get_message("rates_source", lang)
+        
+        # Показываем курсы и возвращаемся в главное меню
+        await message.answer(rates_text)
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        
     except Exception as e:
-        print(f"Ошибка при получении курсов валют: {e}")
-    return get_message("currency_rates_error", "ru")
+        print(f"Ошибка при получении курсов: {e}")
+        await message.answer(get_message("currency_rates_error", lang))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+
 
 # Регистрируем хендлеры
 def register_start_handlers(dp: Dispatcher):
