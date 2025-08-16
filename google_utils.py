@@ -127,7 +127,7 @@ async def check_bsc_transaction(tx_hash: str, target_address: str) -> Dict[str, 
             "error": f"Ошибка проверки транзакции: {str(e)}"
         }
 
-async def verify_transaction(tx_hash: str, network: str, target_address: str, username: str) -> Dict[str, Any]:
+async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
     from tasks import check_erc20_confirmation_task
     """
     Проверяет транзакцию в зависимости от сети
@@ -135,7 +135,7 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
-        check_erc20_confirmation_task.delay(tx_hash, target_address, username)
+        check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
     elif network == "BEP20":
         return await check_bsc_transaction(tx_hash, target_address)
     else:

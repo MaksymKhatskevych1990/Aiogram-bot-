@@ -5,7 +5,12 @@ from threading import Thread
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo 
 
+
+from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.base import StorageKey
+from handlers.crypto import CryptoFSM
 import redis
+from redis.asyncio import Redis as AsyncRedis
 from celery_app import celery_app
 from networks.ethereum import check_transaction_stages
 from handlers.crypto import send_telegram_notification
@@ -15,6 +20,7 @@ from config import logger
 # --- Настройки ---
 REDIS_HOST = "host.docker.internal"
 REDIS_PORT = 6379
+REDIS_DB_FSM = 5  # тот же, что у бота
 REDIS_DB = 0
 REDIS_KEY_PREFIX = "tx:"
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
@@ -50,16 +56,19 @@ def _redis_key(tx_hash: str) -> str:
 def _touch_ttl(key: str):
     r.expire(key, PENDING_TTL)
 
-def _store_initial(username, tx_hash, target_address):
+def _store_initial(username, chat_id, tx_hash, target_address, lang, amount):
     key = _redis_key(tx_hash)
     now = datetime.now(timezone.utc).isoformat()
     r.hset(key, mapping={
         "username": username,
+        "chat_id": int(chat_id),
         "target_address": target_address,
         "first_seen": now,
+        "lang": lang,
         "stage": "in_block,is_erc20,recipient,transfer_params,confirmations",
         "last_error_code": "",
-        "last_error_text": ""
+        "last_error_text": "",
+        "amount": amount
     })
     _touch_ttl(key)
 
@@ -79,10 +88,24 @@ def _update_error(key: str, code: str, text: str):
 def _parse_stage_list(s: str):
     return [x for x in (s or "").split(",") if x]
 
+async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_state, extra: dict | None = None):
+    storage = RedisStorage(redis=AsyncRedis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_FSM))
+    logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
 
+    logger.info(f"[tasks] _advance1_fsm_state params: {chat_id}  -----    {username}  -----   {bot_id}")
+    key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
+    logger.info(f"[tasks] _advanc1e_fsm_state key: -------------------------------------------- {key}")
+    await storage.set_state(key, next_state)
+    current_state = await storage.get_state(key)
+    logger.info(f"[tasks] _advance1_fsm_state current_state after set: {current_state}")
+    data = await storage.get_data(key) or {}
+    logger.info(f"[tasks] _advance1_fsm_state data: -------------------------------------------- {data}")
+    if extra:
+        data.update(extra)
+    await storage.set_data(key, data)
 
 @celery_app.task
-def check_erc20_confirmation_task(tx_hash, target_address, username):
+def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang):
 
     key = _redis_key(tx_hash)
     kyiv_tz = ZoneInfo("Europe/Kyiv")
@@ -93,6 +116,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
     try:
         result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
         code = result.get("code", "") != "low_confirmations"
+        amount = result.get("amount", "N/A")
 
         logger.info(f"[tasks] check_erc20 result: {result}")
 
@@ -103,7 +127,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
                          result.get("timestamp", "N/A"), 
                          now, 
                          result.get("status", "pending"), 
-                         result.get("amount", "N/A"), 
+                         amount, 
                          result.get("error", "") if code else ''
                     ]
 
@@ -111,18 +135,32 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
 
         if result.get("success") and result.get("status") == "confirmed":
             google_update_params = {"status": [result.get("status"), 6]}
-            msg = (
-                f"✅ Ваша транзакция подтверждена!\n\n"
-                f"💳 Хеш: `{tx_hash}`\n"
-                f"Спасибо за использование нашего сервиса!"
-            )
-            run_async_coroutine(send_telegram_notification(username, msg))
+            msg = {
+                "msg_status": "tx_confirmed",
+                "lang": lang,
+                "amount_result": amount,
+                "target_address": target_address,
+                "timestamp": result.get("timestamp", "N/A"),
+            }
+            
             update_transaction_status(tx_hash, google_update_params)
-
+            run_async_coroutine(_advance_fsm_state(
+                username=username,
+                chat_id=chat_id,
+                bot_id=bot_id,
+                next_state=CryptoFSM.contact,  # сам State-объект
+                extra={
+                    "amount_result": amount,
+                    "tx_hash": tx_hash,
+                    "target_address": target_address,
+                    "timestamp": result.get("timestamp", "N/A"),
+                },
+            ))
+            run_async_coroutine(send_telegram_notification(chat_id, msg))
             return
         else:
             if not r.exists(key):
-                _store_initial(username, tx_hash, target_address)
+                _store_initial(username, chat_id, tx_hash, target_address, lang, amount)
 
         # not success → обновим стадии/ошибку и оставим ключ
         stage_left = result.get("stage", [])
@@ -133,13 +171,21 @@ def check_erc20_confirmation_task(tx_hash, target_address, username):
         code = result.get("code")
         if code in ("invalid_token", "invalid_recipient"):
             google_update_params = {"status": result.get("status")}
+            msg = {                
+                "lang": lang,
+                "amount_result": amount,
+                "target_address": target_address,
+                "timestamp": result.get("timestamp", "N/A"),
+            }
             if code == "invalid_token":
-                msg = "❗️ Вы отправили токен, который не является USDT (ERC-20). Мы не можем обработать этот перевод."
+                msg.update({"msg_status": "invalid_token"})
             else:
-                msg = "❗️ Ошибка: USDT были отправлены на адрес, отличающийся от выданного вам. Проверьте адрес назначения."
+                msg.update({"msg_status": "invalid_recipient"})
+                
             google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
-            run_async_coroutine(send_telegram_notification(username, msg))
+            run_async_coroutine(send_telegram_notification(chat_id, msg))
             update_transaction_status(tx_hash, google_update_params)
+            
             r.delete(key)
         else:
             # pending — просто оставляем на periodic beat
@@ -166,9 +212,13 @@ def periodic_check_pending_transactions():
 
             tx_hash = key.split(":")[1]
             username = tx_data.get("username")
+            lang = tx_data.get("lang")
+            chat_id = tx_data.get("chat_id")
+            bot_id = tx_data.get("bot_id")
             target_address = tx_data.get("target_address")
             first_seen_str = tx_data.get("first_seen")
             stage_list = _parse_stage_list(tx_data.get("stage"))
+            amount = tx_data.get("amount", "N/A")
 
             if not username or not target_address:
                 logger.warning(f"[BEAT] Пропускаю {key} — нет username/target_address")
@@ -183,13 +233,27 @@ def periodic_check_pending_transactions():
 
                 if result.get("success"):
                     google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5]}
-                    msg = (
-                        f"✅ Ваша транзакция подтверждена!\n\n"
-                        f"💳 Хеш: `{tx_hash}`\n"
-                        f"Спасибо за использование нашего сервиса!"
-                    )
-                    run_async_coroutine(send_telegram_notification(username, msg))
+                    msg = {
+                        "msg_status": "tx_confirmed",
+                        "lang": lang,
+                        "amount_result": amount,
+                        "target_address": target_address,
+                        "timestamp": result.get("timestamp", "N/A"),
+                    }
+                    run_async_coroutine(send_telegram_notification(chat_id, msg))
                     update_transaction_status(tx_hash, google_update_params)
+                    run_async_coroutine(_advance_fsm_state(
+                        username=username,
+                        chat_id=chat_id,
+                        bot_id=bot_id,
+                        next_state=CryptoFSM.contact,  # сам State-объект
+                        extra={
+                            "amount_result": amount,
+                            "tx_hash": tx_hash,
+                            "target_address": target_address,
+                            "timestamp": result.get("timestamp", "N/A"),
+                        },
+                    ))
                     r.delete(key)
                     continue
 
@@ -201,13 +265,22 @@ def periodic_check_pending_transactions():
 
                 # фатальные кейсы — сразу уведомление и чистим
                 if code in ("invalid_token", "invalid_recipient"):
+                    google_update_params = {"status": result.get("status")}
+                    msg = {                
+                        "lang": lang,
+                        "amount_result": amount,
+                        "target_address": target_address,
+                        "timestamp": result.get("timestamp", "N/A"),
+                    }
                     if code == "invalid_token":
-                        msg = "❗️ Вы отправили токен, который не является USDT (ERC-20). Мы не можем обработать этот перевод."
+                        msg.update({"msg_status": "invalid_token"})
                     else:
-                        msg = "❗️ Ошибка: USDT были отправлены на адрес, отличающийся от выданного вам. Проверьте адрес назначения."
-                    google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5], "error": [result.get("error",""), 8]}
-                    run_async_coroutine(send_telegram_notification(username, msg))
+                        msg.update({"msg_status": "invalid_recipient"})
+                        
+                    google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
+                    run_async_coroutine(send_telegram_notification(chat_id, msg))
                     update_transaction_status(tx_hash, google_update_params)
+
                     r.delete(key)
                     continue
 
@@ -215,14 +288,18 @@ def periodic_check_pending_transactions():
                 if first_seen_str:
                     first_seen = datetime.fromisoformat(first_seen_str)
                     if datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
-                        msg = (
-                            "⚠️ Мы не получили подтверждения по вашей транзакции в течение 2 часов.\n\n"
-                            "Она будет удалена. Если нужна помощь — напишите в поддержку."
-                        )
+                        msg = {     
+                            "msg_status": "expired",           
+                            "lang": lang,
+                            "amount_result": amount,
+                            "target_address": target_address,
+                            "timestamp": result.get("timestamp", "N/A"),
+                        }
                         error_msg = "Транзакция удалена: не получено подтверждение в течение 2 часов"
                         google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
-                        run_async_coroutine(send_telegram_notification(username, msg))
+                        run_async_coroutine(send_telegram_notification(chat_id, msg))
                         update_transaction_status(tx_hash, google_update_params)
+
                         r.delete(key)
                         continue
 

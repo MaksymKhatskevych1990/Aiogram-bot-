@@ -5,13 +5,19 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
 
+from aiogram.fsm.storage.redis import RedisStorage
+from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
+
 from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 
+redis_fsm = AsyncRedis(host="host.docker.internal", port=6379, db=5)
+storage = RedisStorage(redis=redis_fsm)
+
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=storage)
 google = GOOGLE_API_KEY
 
 
