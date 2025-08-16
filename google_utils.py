@@ -75,58 +75,7 @@ def get_wallet_address(network: str) -> str:
         traceback.print_exc()
         return None
 
-async def check_bsc_transaction(tx_hash: str, target_address: str) -> Dict[str, Any]:
-    """
-    Проверяет транзакцию в сети BSC через BSCScan API
-    """
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = f"{BSCSCAN_API}"
-            params = {
-                "module": "proxy",
-                "action": "eth_getTransactionByHash",
-                "txhash": tx_hash,
-                "apikey": BSCSCAN_API_KEY
-            }
-            
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if data.get("result"):
-                        tx_data = data["result"]
-                        # Проверяем статус транзакции
-                        if tx_data.get("to", "").lower() == target_address.lower():
-                            return {
-                                "success": True,
-                                "status": "confirmed",
-                                "amount": int(tx_data.get("value", "0"), 16),
-                                "from": tx_data.get("from", ""),
-                                "to": tx_data.get("to", ""),
-                                "blockNumber": tx_data.get("blockNumber")
-                            }
-                        else:
-                            return {
-                                "success": False,
-                                "error": "Транзакция направлена на другой адрес"
-                            }
-                    else:
-                        return {
-                            "success": False,
-                            "error": "Транзакция не найдена"
-                        }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Ошибка API: {response.status}"
-                    }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Ошибка проверки транзакции: {str(e)}"
-        }
-
-async def verify_transaction(tx_hash: str, network: str, target_address: str, username: str) -> Dict[str, Any]:
+async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
     from tasks import check_erc20_confirmation_task
     """
     Проверяет транзакцию в зависимости от сети
@@ -134,7 +83,7 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
-        check_erc20_confirmation_task.delay(tx_hash, target_address, username)
+        check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
     else:
         return {
             "success": False,
