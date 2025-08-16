@@ -168,6 +168,17 @@ async def get_client_wallet(message: types.Message, state: FSMContext):
     await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CryptoFSM.contact)
 
+async def get_client_wallet(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.amount)
+        return
+    await state.update_data(client_wallet=message.text.strip())
+    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+    await state.set_state(CryptoFSM.contact)
+
 # Обработка хеша транзакции
 async def get_transaction_hash(message: types.Message, state: FSMContext):
     data = await state.get_data()
