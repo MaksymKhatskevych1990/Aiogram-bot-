@@ -11,8 +11,9 @@ from aiogram import Bot
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, update_transaction_status
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
-from keyboards import get_network_keyboard_with_back, get_back_keyboard
+from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard
 from utils.generate_qr_code import generate_wallet_qr
+from utils.commission_calculator import commission_calculator
 from localization import get_message
 
 from config import logger, TOKEN
@@ -25,9 +26,11 @@ async def get_bot_id() -> int:
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
 class CryptoFSM(StatesGroup):
+    operation = State()  # Купить USDT / Продать USDT
     network = State()
     amount = State()
-    transaction_hash = State()
+    client_wallet = State()  # для режима "Купить USDT"
+    transaction_hash = State()  # для режима "Продать USDT"
     contact = State()
     verification = State()
 
@@ -35,6 +38,25 @@ class CryptoFSM(StatesGroup):
 async def start_crypto(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    await message.answer(get_message("choose_crypto_operation", lang), reply_markup=get_crypto_operation_keyboard(lang))
+    await state.set_state(CryptoFSM.operation)
+
+async def set_crypto_operation(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    text = message.text
+    if get_message("back", lang) in text:
+        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
+            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
+            resize_keyboard=True
+        ))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    if text not in (get_message("crypto_buy_usdt", lang), get_message("crypto_sell_usdt", lang)):
+        await message.answer(get_message("choose_crypto_operation", lang), reply_markup=get_crypto_operation_keyboard(lang))
+        return
+    await state.update_data(operation=text)
     await message.answer(get_message("choose_network", lang), reply_markup=get_network_keyboard_with_back(lang))
     await state.set_state(CryptoFSM.network)
 
@@ -44,21 +66,14 @@ async def get_network(message: types.Message, state: FSMContext):
     lang = data.get("language", "ru")
     # Обработка кнопки "Назад"
     if get_message("back", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[
-                [types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))],
-                [types.KeyboardButton(text=get_message("back", lang))]
-            ],
-            resize_keyboard=True
-        ))
-        from handlers.start import StartFSM
-        await state.set_state(StartFSM.action)
+        await message.answer(get_message("choose_crypto_operation", lang), reply_markup=get_crypto_operation_keyboard(lang))
+        await state.set_state(CryptoFSM.operation)
         return
     await state.update_data(network=message.text)
     wallet_address = get_wallet_address(message.text)
     await state.update_data(wallet_address=wallet_address)
     if wallet_address:
-        logo_path = "./img/logo.png"
+        logo_path = "./img/logo-qr.png"
         await message.answer(
             get_message("send_to_address", lang, wallet_address=wallet_address, network=message.text),
             parse_mode="Markdown"
@@ -77,10 +92,81 @@ async def get_amount(message: types.Message, state: FSMContext):
         await message.answer(get_message("choose_network", lang), reply_markup=get_network_keyboard_with_back(lang))
         await state.set_state(CryptoFSM.network)
         return
-    await state.update_data(amount=message.text)
-    await message.answer(get_message("amount_info", lang, amount=message.text))
-    await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
-    await state.set_state(CryptoFSM.transaction_hash)
+    
+    # Проверяем, что введено число
+    try:
+        amount = float(message.text.replace(',', '.'))
+        if amount <= 0:
+            await message.answer(get_message("invalid_amount", lang))
+            return
+    except ValueError:
+        await message.answer(get_message("invalid_amount", lang))
+        return
+    
+    await state.update_data(amount=amount)
+    
+    # Определяем режим операции
+    op = (data.get('operation') or '').strip()
+    exchange_rate = commission_calculator.get_exchange_rate()
+    if op == get_message("crypto_buy_usdt", lang):
+        # Пользователь хочет купить USDT за USD
+        commission_result = commission_calculator.calculate_commission('USD_to_USDT', amount, exchange_rate)
+    else:
+        # Продать USDT за USD (текущая логика)
+        commission_result = commission_calculator.calculate_commission('USDT_to_USD', amount, exchange_rate)
+    
+    if commission_result['success']:
+        # Формируем примечание о комиссии
+        if commission_result['manager_required']:
+            commission_note = get_message("commission_manager_required", lang)
+        elif commission_result['commission_type'] == 'percentage':
+            commission_note = get_message("commission_percentage", lang, percentage=commission_result['commission_value'])
+        elif commission_result['commission_type'] == 'fixed':
+            commission_note = get_message("commission_fixed", lang, amount=commission_result['commission_value'])
+        else:
+            commission_note = ""
+        
+        # Отправляем расчет комиссии
+        if op == get_message("crypto_buy_usdt", lang):
+            currency_from = "USD"
+            currency_to = "USDT"
+        else:
+            currency_from = "USDT"
+            currency_to = "USD"
+        await message.answer(
+            get_message("commission_calculation", lang,
+                       amount=amount,
+                       currency_from=currency_from,
+                       rate=exchange_rate or "Не указан",
+                       commission=f"{commission_result['commission_amount']:.2f}",
+                       currency_to=currency_to,
+                       final_amount=f"{commission_result['final_amount']:.2f}",
+                       commission_note=commission_note),
+            parse_mode="Markdown"
+        )
+    else:
+        await message.answer(f"Ошибка расчета комиссии: {commission_result['error']}")
+    
+    op = (data.get('operation') or '').strip()
+    if op == get_message("crypto_buy_usdt", lang):
+        # Покупка USDT — спрашиваем адрес клиента
+        await message.answer(get_message("enter_client_wallet", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.client_wallet)
+    else:
+        # Продажа USDT — продолжаем по старому сценарию с хешем
+        await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.transaction_hash)
+
+async def get_client_wallet(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.amount)
+        return
+    await state.update_data(client_wallet=message.text.strip())
+    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+    await state.set_state(CryptoFSM.contact)
 
 # Обработка хеша транзакции
 async def get_transaction_hash(message: types.Message, state: FSMContext):
@@ -173,15 +259,27 @@ async def get_contact(message: types.Message, state: FSMContext):
         return
     await state.update_data(contact=message.text)
     data = await state.get_data()
-    summary = get_message(
-        "crypto_request_summary", lang,
-        amount=data.get('amount_result', data.get('amount', 'N/A')),
-        network=data['network'],
-        wallet_address=data['wallet_address'],
-        tx_hash=data['transaction_hash'],
-        contact=data['contact'],
-        username=message.from_user.username if message.from_user.username else 'N/A'
-    )
+    op = (data.get('operation') or '').strip()
+    if op == get_message("crypto_buy_usdt", lang):
+        # Для покупки USDT нет хеша, есть кошелек клиента
+        summary = (
+            f"Новая заявка: Купить USDT\n"
+            f"Сеть: {data.get('network', '')}\n"
+            f"Сумма USD: {data.get('amount', '')}\n"
+            f"Кошелек клиента: {data.get('client_wallet', '')}\n"
+            f"Телефон: {data.get('contact', '')}\n"
+            f"Telegram: @{message.from_user.username if message.from_user.username else 'N/A'}"
+        )
+    else:
+        summary = get_message(
+            "crypto_request_summary", lang,
+            amount=data.get('amount_result', data.get('amount', 'N/A')),
+            network=data['network'],
+            wallet_address=data['wallet_address'],
+            tx_hash=data['transaction_hash'],
+            contact=data['contact'],
+            username=message.from_user.username if message.from_user.username else 'N/A'
+        )
     from config import ADMIN_CHAT_ID
     await message.bot.send_message(ADMIN_CHAT_ID, summary)
     await message.answer(
@@ -215,8 +313,10 @@ async def get_contact(message: types.Message, state: FSMContext):
 # Регистрация хендлеров
 def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(start_crypto, Command("crypto"))
+    dp.message.register(set_crypto_operation, StateFilter(CryptoFSM.operation))
     dp.message.register(get_network, StateFilter(CryptoFSM.network))
     dp.message.register(get_amount, StateFilter(CryptoFSM.amount))
+    dp.message.register(get_client_wallet, StateFilter(CryptoFSM.client_wallet))
     dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
     dp.message.register(get_contact, StateFilter(CryptoFSM.contact))
 

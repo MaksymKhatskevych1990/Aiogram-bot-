@@ -12,6 +12,7 @@ from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
+from utils.channel_rates import ChannelRatesParser
 
 redis_fsm = AsyncRedis(host="host.docker.internal", port=6379, db=5)
 storage = RedisStorage(redis=redis_fsm)
@@ -19,6 +20,13 @@ storage = RedisStorage(redis=redis_fsm)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)
 google = GOOGLE_API_KEY
+
+# Инициализируем парсер курсов из канала
+channel_rates_parser = ChannelRatesParser(bot, "@obmenvalut13")
+
+# Делаем парсер доступным глобально
+import utils.channel_rates
+utils.channel_rates.channel_rates_parser = channel_rates_parser
 
 
 
