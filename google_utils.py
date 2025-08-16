@@ -13,7 +13,6 @@ import datetime
 from utils.decode_etc20 import decode_erc20_input
 
 from networks.tron import check_tron_transaction
-from networks.ethereum import check_ethereum_transaction
 
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
@@ -76,8 +75,7 @@ def get_wallet_address(network: str) -> str:
         traceback.print_exc()
         return None
 
-
-async def verify_transaction(tx_hash: str, network: str, target_address: str, username: str) -> Dict[str, Any]:
+async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
     from tasks import check_erc20_confirmation_task
     """
     Проверяет транзакцию в зависимости от сети
@@ -85,7 +83,7 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
-        check_erc20_confirmation_task.delay(tx_hash, target_address, username)
+        check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
     else:
         return {
             "success": False,
@@ -93,7 +91,7 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
         }
 
 
-def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str, status: str) -> bool:
+def save_transaction_hash(google_params) -> bool:
     try:
         scope = [
             'https://spreadsheets.google.com/feeds',
@@ -104,16 +102,9 @@ def save_transaction_hash(user: str, transaction_hash: str, wallet_address: str,
 
         sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
 
-        row = [
-            user,
-            transaction_hash,
-            wallet_address,
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            status
-        ]
 
-        sheet.append_row(row, value_input_option='USER_ENTERED')
-        print(f"✅ Запись добавлена: {row}")
+        sheet.append_row(google_params, value_input_option='USER_ENTERED')
+        print(f"✅ Запись добавлена: {google_params}")
         return True
 
     except Exception as e:
@@ -150,7 +141,7 @@ def save_crypto_request_to_sheet(data: dict) -> bool:
         print(f"❌ Ошибка при сохранении в Google Sheets: {e}")
         return False
 
-def update_transaction_status(transaction_hash: str, new_status: str) -> bool:
+def update_transaction_status(transaction_hash: str, google_update_params) -> bool:
     try:
         # Авторизация
         scope = [
@@ -168,15 +159,19 @@ def update_transaction_status(transaction_hash: str, new_status: str) -> bool:
 
         if cell:
             # Допустим, колонка статуса — это 5-я колонка (как в твоей функции)
-            status_cell = sheet.cell(cell.row, 5)
+            for k, z in google_update_params.items():
+                value_to_write, col_number = z[0], z[1]
+                status_cell = sheet.cell(cell.row, col_number)
+                
+                logger.info(f"[google_utils] Проверка колонки {col_number} (текущее='{status_cell.value}', новое='{value_to_write}')")
 
-            if status_cell.value != new_status:
-                sheet.update_cell(cell.row, 5, new_status)
-                print(f"✅ Статус обновлен на '{new_status}' для транзакции {transaction_hash}")
-                return True
-            else:
-                print(f"⚠️ Статус уже установлен как '{new_status}'")
-                return False
+                if status_cell.value != value_to_write:
+                    sheet.update_cell(cell.row, col_number, value_to_write)
+                    print(f"✅ Колонка {col_number} обновлена на '{value_to_write}' для транзакции {transaction_hash}")
+                    # return True
+                else:
+                    print(f"⚠️ Колонка {col_number} уже установлена как '{value_to_write}'")
+                    # return False
         else:
             print(f"❌ Транзакция {transaction_hash} не найдена")
             return False
