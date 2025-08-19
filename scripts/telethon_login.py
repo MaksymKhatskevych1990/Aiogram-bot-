@@ -1,34 +1,29 @@
-# scripts/telethon_login.py
-
 import asyncio
 import logging
 import sys
+import ssl
+import socket
 from pathlib import Path
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
+# Настройка детального логирования
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Определяем корневую директорию проекта (на уровень выше, чем scripts/)
+# Определяем корневую директорию проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
-
-# Проверяем, существует ли config.py
-CONFIG_PATH = BASE_DIR / "config.py"
-if not CONFIG_PATH.exists():
-    logger.error(f"❌ Файл config.py не найден по пути: {CONFIG_PATH}")
-    logger.error("Убедитесь, что config.py существует и содержит TELEGRAM_API_ID и TELEGRAM_API_HASH")
-    sys.exit(1)
 
 # Импортируем конфиг
 try:
     import config
 except Exception as e:
-    logger.error("❌ Не удалось импортировать config.py")
-    logger.error(f"Ошибка: {e}")
+    logger.error(f"❌ Не удалось импортировать config.py: {e}")
     sys.exit(1)
 
-# Проверяем наличие API-данных
+# Проверяем API-данные
 if not hasattr(config, "TELEGRAM_API_ID") or not hasattr(config, "TELEGRAM_API_HASH"):
     logger.error("❌ В config.py должны быть определены: TELEGRAM_API_ID и TELEGRAM_API_HASH")
     sys.exit(1)
@@ -42,32 +37,100 @@ SESSION_FILE = BASE_DIR / "rates_session.session"
 logger.info(f"📁 Файл сессии будет сохранён: {SESSION_FILE}")
 
 from telethon import TelegramClient
-
+from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
 
 async def main():
     print("=== 📲 Авторизация в Telegram через Telethon ===")
-    client = TelegramClient(str(SESSION_FILE), config.TELEGRAM_API_ID, config.TELEGRAM_API_HASH)
+    print(f" API ID: {config.TELEGRAM_API_ID}")
+    print(f"🔑 API Hash: {config.TELEGRAM_API_HASH[:10]}...")
+    
+    # Создаем клиент с дополнительными параметрами для Windows
+    client = TelegramClient(
+        str(SESSION_FILE), 
+        config.TELEGRAM_API_ID, 
+        config.TELEGRAM_API_HASH,
+        # Дополнительные параметры для Windows
+        connection_retries=5,
+        retry_delay=1,
+        timeout=30,
+        # Принудительно используем IPv4
+        use_ipv6=False
+    )
 
     try:
-        await client.start()
-
+        logger.info("🔌 Подключаемся к Telegram...")
+        await client.connect()
+        
         if await client.is_user_authorized():
             me = await client.get_me()
             logger.info("✅ Авторизация прошла успешно!")
             print(f"👋 Зашли как: {me.first_name} (@{me.username})")
             print(f"📞 Номер телефона: {me.phone}")
-            print(f"")
             print(f"✅ Сессия сохранена в: {SESSION_FILE}")
-            print(f"ℹ️  Теперь можно запускать бота — он будет использовать эту сессию.")
         else:
-            logger.error("❌ Не удалось авторизоваться. Попробуйте снова.")
-            print("Возможно, вы ввели неправильный код или номер.")
+            logger.info("📱 Требуется авторизация...")
+            print(" Введите номер телефона (включая код страны, например: +380501234567):")
+            
+            try:
+                phone = input().strip()
+                logger.info(f"📱 Отправляем код на номер: {phone}")
+                
+                # Отправляем код
+                await client.send_code_request(phone)
+                print("✅ Код отправлен! Проверьте Telegram.")
+                print("🔢 Введите код из Telegram:")
+                
+                code = input().strip()
+                logger.info("🔐 Пытаемся войти с кодом...")
+                
+                try:
+                    await client.sign_in(phone, code)
+                    logger.info("✅ Вход выполнен успешно!")
+                    
+                    me = await client.get_me()
+                    print(f"👋 Добро пожаловать, {me.first_name}!")
+                    print(f"✅ Сессия сохранена в: {SESSION_FILE}")
+                    
+                except SessionPasswordNeededError:
+                    print("🔒 Введите пароль двухфакторной аутентификации:")
+                    password = input().strip()
+                    await client.sign_in(password=password)
+                    logger.info("✅ Вход с 2FA выполнен успешно!")
+                    
+                except PhoneCodeInvalidError:
+                    logger.error("❌ Неверный код! Попробуйте снова.")
+                    return
+                    
+            except Exception as e:
+                logger.error(f"❌ Ошибка при авторизации: {e}")
+                print(f"Ошибка: {e}")
+                
     except Exception as e:
         logger.exception("❌ Произошла ошибка при подключении к Telegram")
         print(f"Ошибка: {e}")
+        
+        # Дополнительная диагностика для Windows
+        print("\n🔍 Диагностика для Windows:")
+        print("1. Проверьте, не блокирует ли антивирус соединения")
+        print("2. Попробуйте отключить Windows Defender Firewall")
+        print("3. Проверьте настройки прокси в системе")
+        print("4. Убедитесь, что время на компьютере синхронизировано")
+        
     finally:
-        await client.disconnect()
-
+        try:
+            await client.disconnect()
+        except:
+            pass
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Проверяем версию Python и SSL
+    print(f"🐍 Python версия: {sys.version}")
+    print(f"🔒 SSL версия: {ssl.OPENSSL_VERSION}")
+    
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n⏹️ Прервано пользователем")
+    except Exception as e:
+        logger.exception("❌ Критическая ошибка")
+        print(f"Критическая ошибка: {e}")
