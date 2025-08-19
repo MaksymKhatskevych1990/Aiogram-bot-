@@ -14,7 +14,7 @@ from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
 
-redis_fsm = AsyncRedis(host="host.docker.internal", port=6379, db=5)
+redis_fsm = AsyncRedis(host="localhost", port=6379, db=5)
 storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)
