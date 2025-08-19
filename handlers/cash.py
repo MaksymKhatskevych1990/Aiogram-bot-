@@ -40,17 +40,23 @@ async def get_operation(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     text = message.text
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     if text not in (get_message("cash_buy_usd", lang), get_message("cash_sell_usd", lang)):
         await message.answer(get_message("choose_cash_operation", lang), reply_markup=get_cash_operation_keyboard(lang))
         return
+    
     await state.update_data(operation=text)
     # В этом сценарии валюта всегда USD/UAH, шаг выбора валюты пропускаем
     await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
@@ -78,6 +84,14 @@ async def get_currency(message: types.Message, state: FSMContext):
 async def get_amount(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in message.text:
         await message.answer(get_message("choose_cash_operation", lang), reply_markup=get_cash_operation_keyboard(lang))
         await state.set_state(CashFSM.operation)
@@ -127,10 +141,19 @@ async def get_amount(message: types.Message, state: FSMContext):
 async def get_city(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
-    if get_message("back", lang) in message.text:
-        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
-        await state.set_state(CashFSM.amount)
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
         return
+    
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("choose_cash_operation", lang), reply_markup=get_cash_operation_keyboard(lang))
+        await state.set_state(CashFSM.operation)
+        return
+    
     await state.update_data(city=message.text)
     await message.answer(get_message("choose_branch", lang) if get_message("choose_branch", lang) else "Выберите отделение:", reply_markup=get_branch_keyboard(message.text, lang))
     await state.set_state(CashFSM.branch)
@@ -138,11 +161,19 @@ async def get_city(message: types.Message, state: FSMContext):
 async def get_branch(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in message.text:
-        city = data.get('city', '')
         await message.answer(get_message("choose_city_branch", lang), reply_markup=get_city_keyboard(lang))
         await state.set_state(CashFSM.city)
         return
+    
     await state.update_data(branch=message.text)
     await message.answer(get_message("choose_time", lang), reply_markup=get_time_keyboard(lang))
     await state.set_state(CashFSM.time)
@@ -150,11 +181,19 @@ async def get_branch(message: types.Message, state: FSMContext):
 async def get_time(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in message.text:
-        city = data.get('city', '')
-        await message.answer(get_message("choose_branch", lang) if get_message("choose_branch", lang) else "Выберите отделение:", reply_markup=get_branch_keyboard(city, lang))
+        await message.answer(get_message("choose_branch", lang), reply_markup=get_branch_keyboard(data.get('city', ''), lang))
         await state.set_state(CashFSM.branch)
         return
+    
     await state.update_data(time=message.text)
     await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CashFSM.name)
@@ -162,10 +201,19 @@ async def get_time(message: types.Message, state: FSMContext):
 async def get_name(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in message.text:
         await message.answer(get_message("choose_time", lang), reply_markup=get_time_keyboard(lang))
         await state.set_state(CashFSM.time)
         return
+    
     await state.update_data(name=message.text)
     await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CashFSM.phone)
@@ -173,10 +221,19 @@ async def get_name(message: types.Message, state: FSMContext):
 async def get_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
     if get_message("back", lang) in message.text:
         await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
         await state.set_state(CashFSM.name)
         return
+    
     await state.update_data(phone=message.text)
     data = await state.get_data()
     op = (data.get('operation') or '').strip()

@@ -81,6 +81,12 @@ async def choose_action(message: types.Message, state: FSMContext):
     lang = data.get("language", "ru")
     action = message.text
 
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in action:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        await state.set_state(StartFSM.action)
+        return
+
     # Если нажали «Назад»
     if get_message("back", lang) in action:
         await message.answer(get_message("please_press_start", lang), reply_markup=get_start_keyboard(lang))
