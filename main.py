@@ -19,6 +19,7 @@ except Exception as e:
     print("🔄 Переключаюсь на MemoryStorage")
     from aiogram.fsm.storage.memory import MemoryStorage
     storage = MemoryStorage()
+    print("⚠️ ВНИМАНИЕ: Celery задачи будут выполняться синхронно")
 
 from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
