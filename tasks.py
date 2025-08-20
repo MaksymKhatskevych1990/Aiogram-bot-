@@ -7,9 +7,10 @@ from zoneinfo import ZoneInfo
 
 
 from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
-# import redis
-# from redis.asyncio import Redis as AsyncRedis
+import redis
+from redis.asyncio import Redis as AsyncRedis
 
 # Conditional import for Celery
 try:
@@ -34,15 +35,15 @@ from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
 
 # --- Настройки ---
-# REDIS_HOST = "default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@redis.railway.internal"
-# REDIS_PORT = 6379
-# REDIS_DB_FSM = 5  # тот же, что у бота
-# REDIS_DB = 0
-# REDIS_KEY_PREFIX = "tx:"
-# PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
-# MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
+REDIS_HOST = "redis.railway.internal"
+REDIS_PORT = 6379
+REDIS_DB_FSM = 5  # тот же, что у бота
+REDIS_DB = 0
+REDIS_KEY_PREFIX = "tx:"
+PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
+MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
 
-# r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
 
 # async loop infra
 _loop = None
@@ -67,65 +68,59 @@ def run_async_coroutine(coro, timeout=40):
     return future.result(timeout=timeout)
 
 def _redis_key(tx_hash: str) -> str:
-    # return f"{REDIS_KEY_PREFIX}{tx_hash}"
-    return f"tx:{tx_hash}"
+    return f"{REDIS_KEY_PREFIX}{tx_hash}"
 
 def _touch_ttl(key: str):
-    # r.expire(key, PENDING_TTL)
-    pass
+    r.expire(key, PENDING_TTL)
 
 def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount):
-    # key = _redis_key(tx_hash)
-    # now = datetime.now(timezone.utc).isoformat()
-    # r.hset(key, mapping={
-    #     "username": username,
-    #     "chat_id": int(chat_id),
-    #     "bot_id": int(bot_id),
-    #     "target_address": target_address,
-    #     "first_seen": now,
-    #     "lang": lang,
-    #     "stage": "in_block,is_erc20,recipient,transfer_params,confirmations",
-    #     "last_error_code": "",
-    #     "last_error_text": "",
-    #     "amount": amount
-    # })
-    # _touch_ttl(key)
-    pass
+    key = _redis_key(tx_hash)
+    now = datetime.now(timezone.utc).isoformat()
+    r.hset(key, mapping={
+        "username": username,
+        "chat_id": int(chat_id),
+        "bot_id": int(bot_id),
+        "target_address": target_address,
+        "first_seen": now,
+        "lang": lang,
+        "stage": "in_block,is_erc20,recipient,transfer_params,confirmations",
+        "last_error_code": "",
+        "last_error_text": "",
+        "amount": amount
+    })
+    _touch_ttl(key)
 
 def _update_stage(key: str, stage_left):
-    # r.hset(key, mapping={
-    #     "stage": ",".join(stage_left)
-    # })
-    # _touch_ttl(key)
-    pass
+    r.hset(key, mapping={
+        "stage": ",".join(stage_left)
+    })
+    _touch_ttl(key)
 
 def _update_error(key: str, code: str, text: str):
-    # r.hset(key, mapping={
-    #     "last_error_code": code or "",
-    #     "last_error_text": text or ""
-    # })
-    # _touch_ttl(key)
-    pass
+    r.hset(key, mapping={
+        "last_error_code": code or "",
+        "last_error_text": text or ""
+    })
+    _touch_ttl(key)
 
 def _parse_stage_list(s: str):
     return [x for x in (s or "").split(",") if x]
 
 async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_state, extra: dict | None = None):
-    # storage = RedisStorage(redis=AsyncRedis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_FSM))
-    # logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
+    storage = RedisStorage(redis=AsyncRedis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_FSM))
+    logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
 
-    # logger.info(f"[tasks] _advance1_fsm_state params: {chat_id}  -----    {username}  -----   {bot_id}")
-    # key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
-    # logger.info(f"[tasks] _advanc1e_fsm_state key: -------------------------------------------- {key}")
-    # await storage.set_state(key, next_state)
-    # current_state = await storage.get_state(key)
-    # logger.info(f"[tasks] _advance1_fsm_state current_state after set: {current_state}")
-    # data = await storage.get_data(key) or {}
-    # logger.info(f"[tasks] _advance1_fsm_state data: -------------------------------------------- {data}")
-    # if extra:
-    #     data.update(extra)
-    # await storage.set_data(key, data)
-    pass
+    logger.info(f"[tasks] _advance1_fsm_state params: {chat_id}  -----    {username}  -----   {bot_id}")
+    key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
+    logger.info(f"[tasks] _advanc1e_fsm_state key: -------------------------------------------- {key}")
+    await storage.set_state(key, next_state)
+    current_state = await storage.get_state(key)
+    logger.info(f"[tasks] _advance1_fsm_state current_state after set: {current_state}")
+    data = await storage.get_data(key) or {}
+    logger.info(f"[tasks] _advance1_fsm_state data: -------------------------------------------- {data}")
+    if extra:
+        data.update(extra)
+    await storage.set_data(key, data)
 
 @celery_task_fallback
 def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang):
