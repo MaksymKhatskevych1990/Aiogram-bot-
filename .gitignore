@@ -27,3 +27,5 @@ nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC
 test_commission.py
 service_account.json
 start_bot.bat
+/docker-compose.yml
+/Dockerfile

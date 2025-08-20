@@ -6,9 +6,9 @@ from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
 
 # Replace Redis storage with in-memory storage
-from aiogram.fsm.storage.memory import MemoryStorage
-# from aiogram.fsm.storage.redis import RedisStorage
-# from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
+# from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
+from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
 
 from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
@@ -17,9 +17,9 @@ from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
 
 # Use in-memory storage instead of Redis
-storage = MemoryStorage()
-# redis_fsm = AsyncRedis(host="localhost", port=6379, db=5)
-# storage = RedisStorage(redis=redis_fsm)
+# storage = MemoryStorage()
+redis_fsm = AsyncRedis(host="host.docker.internal", port=6379, db=5)
+storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)
