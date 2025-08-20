@@ -73,12 +73,13 @@ def _redis_key(tx_hash: str) -> str:
 def _touch_ttl(key: str):
     r.expire(key, PENDING_TTL)
 
-def _store_initial(username, chat_id, tx_hash, target_address, lang, amount):
+def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount):
     key = _redis_key(tx_hash)
     now = datetime.now(timezone.utc).isoformat()
     r.hset(key, mapping={
         "username": username,
         "chat_id": int(chat_id),
+        "bot_id": int(bot_id),
         "target_address": target_address,
         "first_seen": now,
         "lang": lang,
@@ -177,7 +178,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
             return
         else:
             if not r.exists(key):
-                _store_initial(username, chat_id, tx_hash, target_address, lang, amount)
+                _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount)
 
         # not success → обновим стадии/ошибку и оставим ключ
         stage_left = result.get("stage", [])
