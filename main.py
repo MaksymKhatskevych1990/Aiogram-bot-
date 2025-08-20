@@ -5,19 +5,26 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
 
-# Use Redis storage for production
-from aiogram.fsm.storage.redis import RedisStorage
-from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
+# Try Redis storage first, fallback to MemoryStorage
+try:
+    from aiogram.fsm.storage.redis import RedisStorage
+    from redis.asyncio import Redis as AsyncRedis
+    
+    # Try to connect to Redis using Railway URL
+    redis_fsm = AsyncRedis.from_url("redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@hopper.proxy.rlwy.net:42679", db=5)
+    storage = RedisStorage(redis=redis_fsm)
+    print("✅ Используется Redis storage")
+except Exception as e:
+    print(f"⚠️ Redis недоступен: {e}")
+    print("🔄 Переключаюсь на MemoryStorage")
+    from aiogram.fsm.storage.memory import MemoryStorage
+    storage = MemoryStorage()
 
 from config import TOKEN, GOOGLE_API_KEY, CSV_URL
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
-
-# Use Redis storage for production
-redis_fsm = AsyncRedis(host="redis.railway.internal", port=6379, db=5)
-storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)

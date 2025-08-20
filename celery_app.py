@@ -2,8 +2,8 @@ from celery import Celery
 
 celery_app = Celery(
     "tasks",
-    broker="redis://redis.railway.internal:6379/0",  # брокер задач
-    backend="redis://redis.railway.internal:6379/1", # результат и статусы задач
+    broker="redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@hopper.proxy.rlwy.net:42679/0",  # брокер задач
+    backend="redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@hopper.proxy.rlwy.net:42679/1", # результат и статусы задач
     include=["tasks"]
 )
 
