@@ -31,6 +31,7 @@ class CryptoFSM(StatesGroup):
     amount = State()
     client_wallet = State()  # для режима "Купить USDT"
     transaction_hash = State()  # для режима "Продать USDT"
+    client_name = State()  # для режима "Купить USDT" - имя пользователя
     contact = State()
     verification = State()
 
@@ -89,7 +90,27 @@ async def get_network(message: types.Message, state: FSMContext):
         return
     
     await state.update_data(network=message.text)
-    await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+    
+    # Проверяем, какая операция выбрана
+    operation_data = await state.get_data()
+    operation = operation_data.get('operation', '').strip()
+    
+    # QR код и адрес кошелька показываем только при продаже USDT
+    if operation == get_message("crypto_sell_usdt", operation_data.get("language", "ru")):
+        wallet_address = get_wallet_address(message.text)
+        await state.update_data(wallet_address=wallet_address)
+        
+        if wallet_address:
+            logo_path = "img/logo-qr.png"
+            await message.answer(
+                get_message("send_to_address", operation_data.get("language", "ru"), wallet_address=wallet_address, network=message.text),
+                parse_mode="Markdown"
+            )
+            await generate_wallet_qr(message.bot, message.chat.id, wallet_address, message.text, logo_path, operation_data.get("language", "ru"))
+        else:
+            await message.answer(get_message("address_error", operation_data.get("language", "ru")))
+    
+    await message.answer(get_message("enter_amount", operation_data.get("language", "ru")), reply_markup=get_back_keyboard(operation_data.get("language", "ru")))
     await state.set_state(CryptoFSM.amount)
 
 # Ввод суммы
@@ -158,9 +179,9 @@ async def get_amount(message: types.Message, state: FSMContext):
                 usd_to_pay=commission_result['final_amount']  # сколько USD нужно заплатить
             )
             
-            # При покупке USDT сразу спрашиваем номер телефона
-            await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
-            await state.set_state(CryptoFSM.contact)
+            # При покупке USDT сначала спрашиваем имя
+            await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+            await state.set_state(CryptoFSM.client_name)
             
         else:
             await message.answer(f"❌ Ошибка расчета комиссии: {commission_result['error']}")
@@ -198,11 +219,46 @@ async def get_amount(message: types.Message, state: FSMContext):
                 usd_to_receive=commission_result['final_amount']  # сколько USD получит
             )
             
-            # При продаже USDT показываем адрес кошелька и QR-код
+            # При продаже USDT показываем инструкцию (адрес уже показан при выборе сети)
+            final_amount = f"{commission_result['final_amount']:.2f}"
+            await message.answer(
+                f"{get_message('sell_instruction_header', lang)}\n\n"
+                f"{get_message('sell_instruction_step1', lang, amount=f'{amount:.2f}')}\n"
+                f"{get_message('sell_instruction_step2', lang)}\n"
+                f"{get_message('sell_instruction_step3', lang)}\n\n"
+                f"{get_message('sell_instruction_final', lang, amount=final_amount)}",
+                parse_mode="Markdown"
+            )
+            
             await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
             await state.set_state(CryptoFSM.transaction_hash)
         else:
             await message.answer(f"❌ Ошибка расчета комиссии: {commission_result['error']}")
+
+# Ввод имени пользователя (для покупки USDT)
+async def get_client_name(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        # Возврат к вводу суммы для покупки
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.amount)
+        return
+    
+    # Сохраняем имя пользователя
+    await state.update_data(client_name=message.text.strip())
+    
+    # Теперь спрашиваем номер телефона
+    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+    await state.set_state(CryptoFSM.contact)
 
 async def get_client_wallet(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -331,9 +387,9 @@ async def get_contact(message: types.Message, state: FSMContext):
     
     if get_message("back", lang) in message.text:
         if op == get_message("crypto_buy_usdt", lang):
-            # Возврат к вводу суммы для покупки
-            await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
-            await state.set_state(CryptoFSM.amount)
+            # Возврат к вводу имени для покупки
+            await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+            await state.set_state(CryptoFSM.client_name)
         else:
             # Возврат к вводу хеша для продажи
             await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
@@ -346,6 +402,7 @@ async def get_contact(message: types.Message, state: FSMContext):
         # Для покупки USDT - показываем итоговую информацию и отправляем администратору
         summary = (
             f"🟢 *Новая заявка: Купить USDT*\n\n"
+            f"👤 Имя: {data.get('client_name', 'Не указано')}\n"
             f"🌐 Сеть: {data.get('network', '')}\n"
             f"🎯 Желаемая сумма: {data.get('usdt_amount', '')} USDT\n"
             f"💵 К оплате: {data.get('usd_to_pay', '')} USD\n"
@@ -360,6 +417,7 @@ async def get_contact(message: types.Message, state: FSMContext):
         # Показываем пользователю подтверждение
         await message.answer(
             f"✅ *Заявка на покупку USDT отправлена!*\n\n"
+            f"👤 Имя: {data.get('client_name', 'Не указано')}\n"
             f"🎯 Сумма: {data.get('usdt_amount', '')} USDT\n"
             f"💵 К оплате: {data.get('usd_to_pay', '')} USD\n"
             f"🌐 Сеть: {data.get('network', '')}\n\n"
@@ -383,6 +441,7 @@ def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(set_crypto_operation, StateFilter(CryptoFSM.operation))
     dp.message.register(get_network, StateFilter(CryptoFSM.network))
     dp.message.register(get_amount, StateFilter(CryptoFSM.amount))
+    dp.message.register(get_client_name, StateFilter(CryptoFSM.client_name))
     dp.message.register(get_client_wallet, StateFilter(CryptoFSM.client_wallet))
     dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
     dp.message.register(get_contact, StateFilter(CryptoFSM.contact))
