@@ -14,6 +14,11 @@ MESSAGES = {
         "ua": "Оберіть дію:",
         "en": "Choose an action:"
     },
+    "please_press_start": {
+        "ru": "Пожалуйста, нажмите кнопку «Старт» для начала работы с ботом.",
+        "ua": "Будь ласка, натисніть кнопку «Старт» для початку роботи з ботом.",
+        "en": "Please press the «Start» button to begin working with the bot."
+    },
     "choose_currency": {
         "ru": "Выберите валюту:",
         "ua": "Оберіть валюту:",

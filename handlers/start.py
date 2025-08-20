@@ -83,13 +83,23 @@ async def handle_navigation_buttons(message: types.Message, state: FSMContext):
     
     # Проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        await state.set_state(StartFSM.action)
-        return True
+        action_message = get_message("choose_action", lang)
+        if action_message:  # Проверяем, что сообщение не пустое
+            await message.answer(action_message, reply_markup=get_action_keyboard(lang))
+            await state.set_state(StartFSM.action)
+            return True
     
     # Проверяем кнопку "Назад"
     if get_message("back", lang) in message.text:
-        await message.answer(get_message("please_press_start", lang), reply_markup=get_start_keyboard(lang))
+        # Проверяем, есть ли данные о языке
+        if lang:
+            start_message = get_message("please_press_start", lang)
+            if start_message:  # Проверяем, что сообщение не пустое
+                await message.answer(start_message, reply_markup=get_start_keyboard(lang))
+            else:
+                await message.answer("Пожалуйста, нажмите кнопку «Старт» для начала работы с ботом.", reply_markup=get_start_keyboard(lang))
+        else:
+            await message.answer("Пожалуйста, нажмите кнопку «Старт» для начала работы с ботом.", reply_markup=get_start_keyboard("ru"))
         await state.set_state(StartFSM.waiting_start)
         return True
     
@@ -187,5 +197,6 @@ def register_start_handlers(dp: Dispatcher):
     dp.message.register(set_language, StateFilter(StartFSM.language))
     dp.message.register(choose_action, StateFilter(StartFSM.action))
     
-    # Универсальный обработчик для кнопок навигации (работает в любом состоянии)
-    dp.message.register(handle_navigation_buttons)
+    # Универсальный обработчик для кнопок навигации (работает как fallback)
+    # Регистрируем его с низким приоритетом
+    dp.message.register(handle_navigation_buttons, lambda message: True)
