@@ -35,7 +35,7 @@ from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
 
 # --- Настройки ---
-REDIS_HOST = "host.docker.internal"
+REDIS_HOST = "default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@redis.railway.internal"
 REDIS_PORT = 6379
 REDIS_DB_FSM = 5  # тот же, что у бота
 REDIS_DB = 0

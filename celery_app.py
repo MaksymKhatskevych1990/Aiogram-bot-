@@ -7,6 +7,13 @@ celery_app = Celery(
     include=["tasks"]
 )
 
+celery_app = Celery(
+    "tasks",
+    broker="redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@redis.railway.internal:6379/0",  # брокер задач
+    backend="redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@redis.railway.internal:6379/1", # результат и статусы задач
+    include=["tasks"]
+)
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
