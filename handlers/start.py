@@ -75,6 +75,26 @@ async def set_language(message: types.Message, state: FSMContext):
     await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
     await state.set_state(StartFSM.action)
 
+# Универсальный обработчик для кнопок навигации (работает в любом состоянии)
+async def handle_navigation_buttons(message: types.Message, state: FSMContext):
+    """Обрабатывает кнопки навигации независимо от текущего состояния"""
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # Проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        await state.set_state(StartFSM.action)
+        return True
+    
+    # Проверяем кнопку "Назад"
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("please_press_start", lang), reply_markup=get_start_keyboard(lang))
+        await state.set_state(StartFSM.waiting_start)
+        return True
+    
+    return False
+
 # Пользователь выбирает действие
 async def choose_action(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -166,3 +186,6 @@ def register_start_handlers(dp: Dispatcher):
     dp.message.register(handle_start_button, StateFilter(StartFSM.waiting_start))
     dp.message.register(set_language, StateFilter(StartFSM.language))
     dp.message.register(choose_action, StateFilter(StartFSM.action))
+    
+    # Универсальный обработчик для кнопок навигации (работает в любом состоянии)
+    dp.message.register(handle_navigation_buttons)

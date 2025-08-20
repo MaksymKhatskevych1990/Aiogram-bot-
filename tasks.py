@@ -11,7 +11,24 @@ from aiogram.fsm.storage.base import StorageKey
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-from celery_app import celery_app
+
+# Conditional import for Celery
+try:
+    from celery_app import celery_app
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    celery_app = None
+
+# Fallback decorator when Celery is not available
+def celery_task_fallback(func):
+    """Fallback decorator when Celery is not available"""
+    if CELERY_AVAILABLE:
+        return celery_app.task(func)
+    else:
+        # Return the function as-is when Celery is disabled
+        return func
+
 from networks.ethereum import check_transaction_stages
 from handlers.crypto import send_telegram_notification
 from google_utils import save_transaction_hash, update_transaction_status
@@ -104,7 +121,7 @@ async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_stat
         data.update(extra)
     await storage.set_data(key, data)
 
-@celery_app.task
+@celery_task_fallback
 def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang):
 
     key = _redis_key(tx_hash)
@@ -196,7 +213,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
         _update_error(key, "internal_error", str(e))
 
 
-@celery_app.task
+@celery_task_fallback
 def periodic_check_pending_transactions():
     kyiv_tz = ZoneInfo("Europe/Kyiv")
     now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")

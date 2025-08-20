@@ -9,6 +9,7 @@ from keyboards import (
     get_currency_keyboard_with_back,
     get_back_keyboard,
     get_cash_operation_keyboard,
+    get_action_keyboard,
 )
 from utils.fiat_rates import get_usd_uah_rates
 from utils.commission_calculator import commission_calculator
@@ -67,13 +68,7 @@ async def get_currency(message: types.Message, state: FSMContext):
     lang = data.get("language", "ru")
     # Обработка кнопки "Назад"
     if get_message("back", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[
-                [types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))],
-                [types.KeyboardButton(text=get_message("back", lang))]
-            ],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -271,7 +266,11 @@ async def get_phone(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Заявка отправлена администратору, но возникла ошибка при сохранении в таблицу")
     
     await message.answer(get_message("cash_request_success", lang))
-    await state.clear()
+    
+    # Показываем главное меню вместо очистки состояния
+    await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+    from handlers.start import StartFSM
+    await state.set_state(StartFSM.action)
 
 # 🔧 Регистрация хендлеров
 def register_cash_handlers(dp: Dispatcher):

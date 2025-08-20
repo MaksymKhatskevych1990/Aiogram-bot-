@@ -11,7 +11,7 @@ from aiogram import Bot
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, update_transaction_status
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
-from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard
+from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard
 from utils.generate_qr_code import generate_wallet_qr
 from utils.commission_calculator import commission_calculator
 from localization import get_message
@@ -48,19 +48,13 @@ async def set_crypto_operation(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
     if get_message("back", lang) in text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -79,10 +73,7 @@ async def get_network(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -108,10 +99,7 @@ async def get_amount(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -222,32 +210,7 @@ async def get_client_wallet(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
-        from handlers.start import StartFSM
-        await state.set_state(StartFSM.action)
-        return
-    
-    if get_message("back", lang) in message.text:
-        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
-        await state.set_state(CryptoFSM.amount)
-        return
-    await state.update_data(client_wallet=message.text.strip())
-    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
-    await state.set_state(CryptoFSM.contact)
-
-async def get_client_wallet(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("language", "ru")
-    
-    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
-    if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -267,10 +230,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -307,31 +267,33 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
         int(bot_id),
         lang
     )
-    # if verification_result.get("success"):
-    #     await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
-    #     await message.answer(
-    #         get_message(
-    #             "tx_confirmed", lang,
-    #             amount=verification_result.get('amount', 'N/A'),
-    #             from_addr=verification_result.get('from', 'N/A')[:10] + '...',
-    #             timestamp=verification_result.get('timestamp', 'N/A')
-    #         ),
-    #         reply_markup=get_back_keyboard(lang)
-    #     )
-    #     save_transaction_hash(
-    #         message.from_user.username or str(message.from_user.id),
-    #         tx_hash,
-    #         wallet_address,
-    #         "PENDING"
-    #     )
-    #     await state.set_state(CryptoFSM.contact)
-    # else:
-    #     error_msg = verification_result.get("error", "Неизвестная ошибка")
-    #     await message.answer(
-    #         get_message("tx_not_confirmed", lang, error=error_msg),
-    #         reply_markup=get_back_keyboard(lang)
-    #     )
-    #     await state.set_state(CryptoFSM.transaction_hash)
+    
+    # Обрабатываем результат верификации
+    if verification_result.get("success"):
+        await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
+        await message.answer(
+            get_message(
+                "tx_confirmed", lang,
+                amount=verification_result.get('amount', 'N/A'),
+                from_addr=verification_result.get('from', 'N/A')[:10] + '...',
+                timestamp=verification_result.get('timestamp', 'N/A')
+            ),
+            reply_markup=get_back_keyboard(lang)
+        )
+        save_transaction_hash(
+            message.from_user.username or str(message.from_user.id),
+            tx_hash,
+            wallet_address,
+            "PENDING"
+        )
+        await state.set_state(CryptoFSM.contact)
+    else:
+        error_msg = verification_result.get("error", "Неизвестная ошибка")
+        await message.answer(
+            get_message("tx_not_confirmed", lang, error=error_msg),
+            reply_markup=get_back_keyboard(lang)
+        )
+        await state.set_state(CryptoFSM.transaction_hash)
 
 async def send_telegram_notification(chat_id: str, message):
     """
@@ -359,10 +321,7 @@ async def get_contact(message: types.Message, state: FSMContext):
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
-        await message.answer(get_message("choose_action", lang), reply_markup=types.ReplyKeyboardMarkup(
-            keyboard=[[types.KeyboardButton(text=get_message("cash_exchange", lang)), types.KeyboardButton(text=get_message("crypto_exchange", lang))], [types.KeyboardButton(text=get_message("back", lang))]],
-            resize_keyboard=True
-        ))
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
@@ -390,7 +349,7 @@ async def get_contact(message: types.Message, state: FSMContext):
             f"🌐 Сеть: {data.get('network', '')}\n"
             f"🎯 Желаемая сумма: {data.get('usdt_amount', '')} USDT\n"
             f"💵 К оплате: {data.get('usd_to_pay', '')} USD\n"
-            f" Телефон: {data.get('contact', '')}\n"
+            f"📱 Телефон: {data.get('contact', '')}\n"
             f"👤 Telegram: @{message.from_user.username if message.from_user.username else 'N/A'}"
         )
         
@@ -401,15 +360,17 @@ async def get_contact(message: types.Message, state: FSMContext):
         # Показываем пользователю подтверждение
         await message.answer(
             f"✅ *Заявка на покупку USDT отправлена!*\n\n"
-            f" Сумма: {data.get('usdt_amount', '')} USDT\n"
+            f"🎯 Сумма: {data.get('usdt_amount', '')} USDT\n"
             f"💵 К оплате: {data.get('usd_to_pay', '')} USD\n"
             f"🌐 Сеть: {data.get('network', '')}\n\n"
             f"📞 Наш менеджер свяжется с вами в ближайшее время для уточнения деталей.",
             parse_mode="Markdown"
         )
         
-        # Очищаем состояние
-        await state.clear()
+        # Показываем главное меню вместо очистки состояния
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
         
     else:
         # Для продажи USDT - продолжаем по старому сценарию
