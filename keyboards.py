@@ -34,7 +34,8 @@ def get_action_keyboard(lang="ru"):
 def get_back_keyboard(lang="ru"):
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=get_message("back", lang))]
+            [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))]
         ],
         resize_keyboard=True
     )
@@ -43,7 +44,8 @@ def get_network_keyboard_with_back(lang="ru"):
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="ERC20"), KeyboardButton(text="TRC20")],
-            [KeyboardButton(text=get_message("back", lang))]
+            [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))]
         ],
         resize_keyboard=True
     )
@@ -52,7 +54,8 @@ def get_currency_keyboard_with_back(lang="ru"):
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="USD"), KeyboardButton(text="UAH")],
-            [KeyboardButton(text=get_message("back", lang))]
+            [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))]
         ],
         resize_keyboard=True
     )
@@ -73,13 +76,19 @@ CITY_BRANCHES = {
 def get_city_keyboard(lang="ru"):
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=city)] for city in CITY_BRANCHES.keys()
-    ] + [[KeyboardButton(text=get_message("back", lang))]], resize_keyboard=True)
+    ] + [
+        [KeyboardButton(text=get_message("back", lang))],
+        [KeyboardButton(text=get_message("back_to_main", lang))]
+    ], resize_keyboard=True)
 
 def get_branch_keyboard(city, lang="ru"):
     branches = CITY_BRANCHES.get(city, [])
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=branch)] for branch in branches
-    ] + [[KeyboardButton(text=get_message("back", lang))]], resize_keyboard=True)
+    ] + [
+        [KeyboardButton(text=get_message("back", lang))],
+        [KeyboardButton(text=get_message("back_to_main", lang))]
+    ], resize_keyboard=True)
 
 def get_time_keyboard(lang="ru"):
     return ReplyKeyboardMarkup(keyboard=[
@@ -87,7 +96,8 @@ def get_time_keyboard(lang="ru"):
         [KeyboardButton(text="Завтра, утро")],
         [KeyboardButton(text="Завтра, день")],
         [KeyboardButton(text="Завтра, вечер")],
-        [KeyboardButton(text=get_message("back", lang))]
+        [KeyboardButton(text=get_message("back", lang))],
+        [KeyboardButton(text=get_message("back_to_main", lang))]
     ], resize_keyboard=True)
 
 
@@ -99,6 +109,7 @@ def get_crypto_operation_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 KeyboardButton(text=get_message("crypto_sell_usdt", lang)),
             ],
             [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))],
         ],
         resize_keyboard=True,
     )
@@ -112,6 +123,7 @@ def get_cash_operation_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 KeyboardButton(text=get_message("cash_sell_usd", lang)),
             ],
             [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))],
         ],
         resize_keyboard=True,
     )

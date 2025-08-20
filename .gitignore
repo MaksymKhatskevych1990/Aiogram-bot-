@@ -4,7 +4,6 @@ __pycache__/
 *.pyd
 .idea/
 venv/
-config.py
 client_secret_317694747647-tf1drt9g8v1s6p07t1d94jen11qa85ud.apps.googleusercon
 .env
 *.sqlite3
@@ -26,3 +25,4 @@ rates_session.session
 nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC
 test_commission.py
 service_account.json
+start_bot.bat

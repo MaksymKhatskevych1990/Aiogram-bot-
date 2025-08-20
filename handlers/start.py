@@ -75,11 +75,47 @@ async def set_language(message: types.Message, state: FSMContext):
     await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
     await state.set_state(StartFSM.action)
 
+# Универсальный обработчик для кнопок навигации (работает в любом состоянии)
+async def handle_navigation_buttons(message: types.Message, state: FSMContext):
+    """Обрабатывает кнопки навигации независимо от текущего состояния"""
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # Проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        action_message = get_message("choose_action", lang)
+        if action_message:  # Проверяем, что сообщение не пустое
+            await message.answer(action_message, reply_markup=get_action_keyboard(lang))
+            await state.set_state(StartFSM.action)
+            return True
+    
+    # Проверяем кнопку "Назад"
+    if get_message("back", lang) in message.text:
+        # Проверяем, есть ли данные о языке
+        if lang:
+            start_message = get_message("please_press_start", lang)
+            if start_message:  # Проверяем, что сообщение не пустое
+                await message.answer(start_message, reply_markup=get_start_keyboard(lang))
+            else:
+                await message.answer("Пожалуйста, нажмите кнопку «Старт» для начала работы с ботом.", reply_markup=get_start_keyboard(lang))
+        else:
+            await message.answer("Пожалуйста, нажмите кнопку «Старт» для начала работы с ботом.", reply_markup=get_start_keyboard("ru"))
+        await state.set_state(StartFSM.waiting_start)
+        return True
+    
+    return False
+
 # Пользователь выбирает действие
 async def choose_action(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     action = message.text
+
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in action:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        await state.set_state(StartFSM.action)
+        return
 
     # Если нажали «Назад»
     if get_message("back", lang) in action:
@@ -160,3 +196,7 @@ def register_start_handlers(dp: Dispatcher):
     dp.message.register(handle_start_button, StateFilter(StartFSM.waiting_start))
     dp.message.register(set_language, StateFilter(StartFSM.language))
     dp.message.register(choose_action, StateFilter(StartFSM.action))
+    
+    # Универсальный обработчик для кнопок навигации (работает как fallback)
+    # Регистрируем его с низким приоритетом
+    dp.message.register(handle_navigation_buttons, lambda message: True)
