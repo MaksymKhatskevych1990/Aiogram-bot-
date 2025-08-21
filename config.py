@@ -34,19 +34,16 @@ TRC20_CONFIRMATIONS = os.getenv('TRC20_CONFIRMATIONS')
 TRONSCAN_API = os.getenv('TRONSCAN_API')
 ERC20_CONFIRMATIONS = os.getenv('ERC20_CONFIRMATIONS')
 
-# Настройки Google Sheets API (заполните своими данными)
-GOOGLE_CREDENTIALS = {
-    "type": "service_account",
-    "project_id": "your-project-id",
-    "private_key_id": "your-private-key-id",
-    "private_key": "your-private-key",
-    "client_email": "your-client-email",
-    "client_id": "your-client-id",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "your-cert-url"
-}
+
+REDIS_BACKEND_URL = os.getenv('REDIS_BACKEND_URL')
+REDIS_BROKER_URL = os.getenv('REDIS_BROKER_URL')
+REDISHOST = os.getenv('REDISHOST')
+REDISPASSWORD = os.getenv('REDISPASSWORD')
+REDISPORT = os.getenv('REDISPORT')
+REDIS_DB_FSM = os.getenv('REDIS_DB_FSM')
+REDIS_DB = os.getenv('REDIS_DB')
+REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX')
+
 
 
 # ID чата администратора для заявок

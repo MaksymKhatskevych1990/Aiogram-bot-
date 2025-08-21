@@ -10,7 +10,7 @@ from aiogram import Bot
 from telethon import TelegramClient
 import sys
 from pathlib import Path
-
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB, REDIS_KEY_PREFIX
 import config  # твой конфиг с TELEGRAM_API_ID и TELEGRAM_API_HASH
 
 # 📌 Путь к файлу сессии Telethon — создаём сразу при загрузке модуля
@@ -26,9 +26,10 @@ class ChannelRatesParser:
 
         # Redis
         self.redis_client = redis.Redis(
-            host="default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@redis.railway.internal",
-            port=6379,
-            db=0,
+            host=REDISHOST,
+            password=REDISPASSWORD,
+            port=REDISPORT,
+            db=REDIS_DB,
             decode_responses=True,
             socket_timeout=3
         )
