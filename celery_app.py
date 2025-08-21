@@ -1,10 +1,10 @@
 from celery import Celery
-from config import REDIS_BACKEND_URL, REDIS_BROKER_URL
+from config import REDIS_URL
 
 celery_app = Celery(
     "tasks",
-    broker=REDIS_BROKER_URL,  # брокер задач
-    backend=REDIS_BACKEND_URL, # результат и статусы задач
+    broker=f"{REDIS_URL}/0",  # брокер задач
+    backend=f"{REDIS_URL}/1", # результат и статусы задач
     include=["tasks"]
 )
 
