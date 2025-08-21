@@ -5,9 +5,8 @@ from threading import Thread
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo 
 
-
-from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
@@ -67,9 +66,14 @@ def _redis_key(tx_hash: str) -> str:
     return f"{REDIS_KEY_PREFIX}{tx_hash}"
 
 def _touch_ttl(key: str):
-    r.expire(key, PENDING_TTL)
+    if r:
+        r.expire(key, PENDING_TTL)
 
 def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount):
+    if not r:
+        logger.error("Redis недоступен")
+        return
+    
     key = _redis_key(tx_hash)
     now = datetime.now(timezone.utc).isoformat()
     r.hset(key, mapping={
@@ -87,12 +91,16 @@ def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amo
     _touch_ttl(key)
 
 def _update_stage(key: str, stage_left):
+    if not r:
+        return
     r.hset(key, mapping={
         "stage": ",".join(stage_left)
     })
     _touch_ttl(key)
 
 def _update_error(key: str, code: str, text: str):
+    if not r:
+        return
     r.hset(key, mapping={
         "last_error_code": code or "",
         "last_error_text": text or ""
@@ -103,23 +111,29 @@ def _parse_stage_list(s: str):
     return [x for x in (s or "").split(",") if x]
 
 async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_state, extra: dict | None = None):
-    storage = RedisStorage(redis=AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM))
-    logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
+    try:
+        storage = RedisStorage(redis=AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM))
+        logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
 
-    logger.info(f"[tasks] _advance1_fsm_state params: {chat_id}  -----    {username}  -----   {bot_id}")
-    key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
-    logger.info(f"[tasks] _advanc1e_fsm_state key: -------------------------------------------- {key}")
-    await storage.set_state(key, next_state)
-    current_state = await storage.get_state(key)
-    logger.info(f"[tasks] _advance1_fsm_state current_state after set: {current_state}")
-    data = await storage.get_data(key) or {}
-    logger.info(f"[tasks] _advance1_fsm_state data: -------------------------------------------- {data}")
-    if extra:
-        data.update(extra)
-    await storage.set_data(key, data)
+        logger.info(f"[tasks] _advance_fsm_state params: {chat_id} ----- {username} ----- {bot_id}")
+        key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
+        logger.info(f"[tasks] _advance_fsm_state key: {key}")
+        await storage.set_state(key, next_state)
+        current_state = await storage.get_state(key)
+        logger.info(f"[tasks] _advance_fsm_state current_state after set: {current_state}")
+        data = await storage.get_data(key) or {}
+        logger.info(f"[tasks] _advance_fsm_state data: {data}")
+        if extra:
+            data.update(extra)
+        await storage.set_data(key, data)
+    except Exception as e:
+        logger.error(f"Ошибка в _advance_fsm_state: {e}")
 
 @celery_task_fallback
 def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang):
+    if not r:
+        logger.error("Redis недоступен для check_erc20_confirmation_task")
+        return
 
     key = _redis_key(tx_hash)
     kyiv_tz = ZoneInfo("Europe/Kyiv")
@@ -162,7 +176,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
                 username=username,
                 chat_id=chat_id,
                 bot_id=bot_id,
-                next_state=CryptoFSM.contact,  # сам State-объект
+                next_state=CryptoFSM.contact,
                 extra={
                     "amount_result": amount,
                     "tx_hash": tx_hash,
@@ -207,13 +221,18 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
 
     except Exception as e:
         logger.error(f"Ошибка проверки {tx_hash}: {e}")
-        _update_error(key, "internal_error", str(e))
-
+        if r:
+            _update_error(key, "internal_error", str(e))
 
 @celery_task_fallback
 def periodic_check_pending_transactions():
+    if not r:
+        logger.error("Redis недоступен для periodic_check_pending_transactions")
+        return
+        
     kyiv_tz = ZoneInfo("Europe/Kyiv")
     now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")
+    
     """
     Периодический обход всех pending транзакций.
     """
@@ -260,7 +279,7 @@ def periodic_check_pending_transactions():
                         username=username,
                         chat_id=chat_id,
                         bot_id=bot_id,
-                        next_state=CryptoFSM.contact,  # сам State-объект
+                        next_state=CryptoFSM.contact,
                         extra={
                             "amount_result": amount,
                             "tx_hash": tx_hash,
@@ -298,32 +317,9 @@ def periodic_check_pending_transactions():
                     r.delete(key)
                     continue
 
-                # просрочка ожидания
-                if first_seen_str:
-                    first_seen = datetime.fromisoformat(first_seen_str)
-                    if datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
-                        msg = {     
-                            "msg_status": "expired",           
-                            "lang": lang,
-                            "amount_result": amount,
-                            "target_address": target_address,
-                            "timestamp": result.get("timestamp", "N/A"),
-                        }
-                        error_msg = "Транзакция удалена: не получено подтверждение в течение 2 часов"
-                        google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
-                        run_async_coroutine(send_telegram_notification(chat_id, msg))
-                        update_transaction_status(tx_hash, google_update_params)
-
-                        r.delete(key)
-                        continue
-
-                # если просто pending — оставляем ключ с продлённым TTL
-                _touch_ttl(key)
-
             except Exception as e:
-                logger.error(f"[BEAT] Ошибка при проверке {tx_hash}: {e}")
-                _update_error(key, "internal_error", str(e))
-                _touch_ttl(key)
+                logger.error(f"Ошибка в periodic_check_pending_transactions для {tx_hash}: {e}")
+                continue
 
     except Exception as e:
-        logger.error(f"[BEAT] Ошибка в periodic_check_pending_transactions: {e}")
+        logger.error(f"Критическая ошибка в periodic_check_pending_transactions: {e}") 
