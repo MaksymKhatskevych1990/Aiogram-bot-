@@ -52,3 +52,17 @@ ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')  # Замените на реальн
 TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID')            # укажи свой api_id с my.telegram.org
 TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH')         # укажи свой api_hash с my.telegram.org
 TELETHON_SESSION = os.getenv('TELETHON_SESSION')  # имя файла сессии (создастся после логина)
+
+GOOGLE_CREDENTIALS  = {
+    "type": os.getenv("GOOGLE_TYPE"),
+    "project_id": os.getenv("GOOGLE_PROJECT_ID"),
+    "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"), # Важно: заменить \n на перенос строки
+    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
+    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CRT_URL"),
+    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL"),
+    "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN")
+}

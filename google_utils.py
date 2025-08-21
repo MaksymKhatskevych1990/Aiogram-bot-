@@ -7,7 +7,7 @@ import json
 from typing import Optional, Dict, Any
 from config import ETHERSCAN_API_KEY, BSCSCAN_API_KEY, TRONSCAN_API_KEY
 
-from config import logger
+from config import logger, GOOGLE_CREDENTIALS 
 import datetime
 
 from utils.decode_etc20 import decode_erc20_input
@@ -17,7 +17,7 @@ from networks.tron import check_tron_transaction
 def connect_to_sheet():
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
     client = gspread.authorize(creds)
     sheet = client.open("Название_таблицы").sheet1  # Название как в Google Sheets
     return sheet
@@ -55,7 +55,7 @@ def get_wallet_address(network: str) -> str:
         # Подключаемся к Google Sheets
         scope = ['https://spreadsheets.google.com/feeds',
                  'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
 
         # Открываем таблицу и лист "Лист3"
@@ -97,7 +97,7 @@ def save_transaction_hash(google_params) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
 
         sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
@@ -117,7 +117,7 @@ def save_crypto_request_to_sheet(data: dict) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
         
         # Открываем таблицу и выбираем "Лист5"
@@ -148,7 +148,7 @@ def update_transaction_status(transaction_hash: str, google_update_params) -> bo
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
 
         # Открываем нужный лист
@@ -193,7 +193,7 @@ def save_cash_exchange_request_to_sheet(data: dict) -> bool:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
         
         # Определяем лист в зависимости от операции

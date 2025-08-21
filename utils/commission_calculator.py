@@ -1,6 +1,7 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from typing import Dict, Optional, Tuple
+from config import GOOGLE_CREDENTIALS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class CommissionCalculator:
         try:
             scope = ['https://spreadsheets.google.com/feeds',
                      'https://www.googleapis.com/auth/drive']
-            creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
             client = gspread.authorize(creds)
             
             # Открываем таблицу и лист с комиссиями
@@ -189,7 +190,7 @@ class CommissionCalculator:
         try:
             scope = ['https://spreadsheets.google.com/feeds',
                      'https://www.googleapis.com/auth/drive']
-            creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
             client = gspread.authorize(creds)
             
             # Открываем лист с курсами
