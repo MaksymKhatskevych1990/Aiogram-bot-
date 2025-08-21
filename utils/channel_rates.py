@@ -42,7 +42,8 @@ class ChannelRatesParser:
 
         # Redis
         self.redis_client = redis.Redis.from_url(
-            f"{REDIS_URL}/0",
+            REDIS_URL, 
+            db=0,
             decode_responses=True,
             socket_timeout=3
         )

@@ -18,7 +18,7 @@ from utils.channel_rates import ChannelRatesParser
 
 # Use in-memory storage instead of Redis
 # storage = MemoryStorage()
-redis_fsm =AsyncRedis.from_url(f"{REDIS_URL}/{REDIS_DB_FSM}")
+redis_fsm = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
 storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)
