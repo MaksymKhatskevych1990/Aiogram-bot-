@@ -15,6 +15,7 @@ from utils.decode_etc20 import decode_erc20_input
 from networks.tron import check_tron_transaction
 
 def connect_to_sheet():
+    print(f"✅ Заявка добавлена: {GOOGLE_CREDENTIALS}")
     scope = ['https://spreadsheets.google.com/feeds',
              'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
