@@ -5,27 +5,21 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
 
-# Try Redis storage first, fallback to MemoryStorage
-try:
-    from aiogram.fsm.storage.redis import RedisStorage
-    from redis.asyncio import Redis as AsyncRedis
-    
-    # Try to connect to Redis using Railway URL
-    redis_fsm = AsyncRedis.from_url("redis://default:buLKeHNoBFZARkjVpNAEFbjdRLhiguts@hopper.proxy.rlwy.net:42679", db=5)
-    storage = RedisStorage(redis=redis_fsm)
-    print("✅ Используется Redis storage")
-except Exception as e:
-    print(f"⚠️ Redis недоступен: {e}")
-    print("🔄 Переключаюсь на MemoryStorage")
-    from aiogram.fsm.storage.memory import MemoryStorage
-    storage = MemoryStorage()
-    print("⚠️ ВНИМАНИЕ: Celery задачи будут выполняться синхронно")
+# Replace Redis storage with in-memory storage
+# from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
+from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
 
-from config import TOKEN, GOOGLE_API_KEY, CSV_URL
+from config import TOKEN, GOOGLE_API_KEY, CSV_URL, REDIS_URL, REDIS_DB_FSM
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
+
+# Use in-memory storage instead of Redis
+# storage = MemoryStorage()
+redis_fsm = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
+storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)

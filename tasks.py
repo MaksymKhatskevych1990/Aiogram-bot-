@@ -10,7 +10,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX, REDIS_URL
 # Conditional import for Celery
 try:
     from celery_app import celery_app
@@ -33,31 +33,12 @@ from handlers.crypto import send_telegram_notification
 from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
 
-# --- Настройки Redis ---
-REDIS_HOST = "hopper.proxy.rlwy.net"
-REDIS_PORT = 42679
-REDIS_PASSWORD = "buLKeHNoBFZARkjVpNAEFbjdRLhiguts"
-REDIS_DB_FSM = 5  # тот же, что у бота
-REDIS_DB = 0
-REDIS_KEY_PREFIX = "tx:"
+# --- Настройки ---
+
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
 MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
 
-# Инициализация Redis подключения
-try:
-    r = redis.Redis(
-        host=REDIS_HOST, 
-        port=REDIS_PORT, 
-        password=REDIS_PASSWORD, 
-        db=REDIS_DB, 
-        decode_responses=True
-    )
-    # Проверяем подключение
-    r.ping()
-    logger.info("✅ Redis подключение успешно")
-except Exception as e:
-    logger.error(f"❌ Ошибка подключения к Redis: {e}")
-    r = None
+r = redis.Redis.from_url(REDIS_URL, db=0, decode_responses=True)
 
 # async loop infra
 _loop = None
@@ -131,13 +112,8 @@ def _parse_stage_list(s: str):
 
 async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_state, extra: dict | None = None):
     try:
-        storage = RedisStorage(redis=AsyncRedis(
-            host=REDIS_HOST, 
-            port=REDIS_PORT, 
-            password=REDIS_PASSWORD, 
-            db=REDIS_DB_FSM
-        ))
-        logger.info(f"[tasks] _advance_fsm_state storage: {storage}")
+        storage = RedisStorage(redis=AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM))
+        logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
 
         logger.info(f"[tasks] _advance_fsm_state params: {chat_id} ----- {username} ----- {bot_id}")
         key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)

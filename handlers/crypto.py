@@ -352,6 +352,10 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     #     await state.set_state(CryptoFSM.transaction_hash)
 
 async def send_telegram_notification(chat_id: str, msg):
+    from aiogram import Bot
+    from config import logger, TOKEN
+    
+    bot = Bot(token=TOKEN)
     """
     Отправляет уведомление в Telegram пользователю о подтвержденной транзакции
     """
