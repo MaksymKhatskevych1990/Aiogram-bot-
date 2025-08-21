@@ -8,7 +8,7 @@ from pathlib import Path
 from telethon import TelegramClient
 import importlib
 
-from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_URL, REDIS_DB, REDIS_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +41,8 @@ class ChannelRatesParser:
         )
 
         # Redis
-        self.redis_client = redis.Redis(
-            host=REDISHOST,
-            password=REDISPASSWORD,
-            port=REDISPORT,
-            db=REDIS_DB,
+        self.redis_client = redis.Redis.from_url(
+            f"{REDIS_URL}/0",
             decode_responses=True,
             socket_timeout=3
         )

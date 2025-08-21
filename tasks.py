@@ -11,7 +11,7 @@ from aiogram.fsm.storage.base import StorageKey
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX, REDIS_URL
 # Conditional import for Celery
 try:
     from celery_app import celery_app
@@ -39,7 +39,7 @@ from config import logger
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
 MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
 
-r = redis.Redis(host=REDISHOST, password=REDISPASSWORD, port=REDISPORT, db=REDIS_DB, decode_responses=True)
+r = redis.Redis.from_url(f"{REDIS_URL}/0", decode_responses=True)
 
 # async loop infra
 _loop = None
@@ -103,7 +103,7 @@ def _parse_stage_list(s: str):
     return [x for x in (s or "").split(",") if x]
 
 async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_state, extra: dict | None = None):
-    storage = RedisStorage(redis=AsyncRedis(host=REDISHOST, password=REDISPASSWORD, port=REDISPORT, db=REDIS_DB_FSM))
+    storage = RedisStorage(redis=AsyncRedis.from_url(f"{REDIS_URL}/{REDIS_DB_FSM}"))
     logger.info(f"[tasks] _advanc1e_fsm_state storage: -------------------------------------------- {storage}")
 
     logger.info(f"[tasks] _advance1_fsm_state params: {chat_id}  -----    {username}  -----   {bot_id}")
