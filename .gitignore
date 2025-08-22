@@ -27,3 +27,4 @@ service_account.json
 start_bot.bat
 /docker-compose.yml
 /Dockerfile
+request_counter.txt
