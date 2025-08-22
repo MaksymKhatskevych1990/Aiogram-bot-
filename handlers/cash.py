@@ -15,44 +15,65 @@ from utils.fiat_rates import get_usd_uah_rates
 from utils.commission_calculator import commission_calculator
 from google_utils import save_cash_exchange_request_to_sheet
 from localization import get_message
+from config import REDIS_URL
 import redis
 
 # Инициализация Redis для хранения счетчика заявок
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+try:
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+    # Проверяем подключение
+    r.ping()
+    print("✅ Redis подключен успешно")
+except Exception as e:
+    print(f"❌ Ошибка подключения к Redis: {e}")
+    r = None
 
 async def get_next_request_number() -> int:
     """
     Получает следующий номер заявки, начиная с 1
     Использует Redis для атомарного увеличения счетчика
     """
+    if r is None:
+        # Если Redis недоступен, используем файл
+        return await get_next_request_number_from_file()
+    
     try:
         # Увеличиваем счетчик атомарно
         request_number = r.incr('cash_exchange_request_counter')
         return request_number
     except Exception as e:
         print(f"❌ Ошибка при получении номера заявки из Redis: {e}")
-        try:
-            # Fallback: используем файл для хранения счетчика
-            import os
-            counter_file = "request_counter.txt"
-            
-            if os.path.exists(counter_file):
-                with open(counter_file, 'r') as f:
-                    current_counter = int(f.read().strip())
-            else:
-                current_counter = 0
-            
-            current_counter += 1
-            
-            with open(counter_file, 'w') as f:
-                f.write(str(current_counter))
-            
-            return current_counter
-        except Exception as file_error:
-            print(f"❌ Ошибка при работе с файлом счетчика: {file_error}")
-            # Последний fallback: используем текущее время
-            import time
-            return int(time.time()) % 1000000
+        # Fallback: используем файл для хранения счетчика
+        return await get_next_request_number_from_file()
+
+async def get_next_request_number_from_file() -> int:
+    """
+    Fallback функция для получения номера заявки из файла
+    """
+    try:
+        import os
+        counter_file = "request_counter.txt"
+        
+        if os.path.exists(counter_file):
+            with open(counter_file, 'r') as f:
+                current_counter = int(f.read().strip())
+        else:
+            current_counter = 0
+        
+        current_counter += 1
+        
+        with open(counter_file, 'w') as f:
+            f.write(str(current_counter))
+        
+        print(f"📝 Номер заявки получен из файла: {current_counter}")
+        return current_counter
+    except Exception as file_error:
+        print(f"❌ Ошибка при работе с файлом счетчика: {file_error}")
+        # Последний fallback: используем текущее время
+        import time
+        fallback_number = int(time.time()) % 1000000
+        print(f"⏰ Используется fallback номер: {fallback_number}")
+        return fallback_number
 
 # 💼 Состояния FSM
 class CashFSM(StatesGroup):
