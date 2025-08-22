@@ -82,6 +82,8 @@ class CashFSM(StatesGroup):
     amount = State()
     city = State()
     branch = State()
+    name = State()
+    phone = State()
 
 # 🔁 Хендлеры поэтапно
 async def start_cash(message: types.Message, state: FSMContext):
@@ -226,6 +228,46 @@ async def get_branch(message: types.Message, state: FSMContext):
         return
     
     await state.update_data(branch=message.text)
+    await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+    await state.set_state(CashFSM.name)
+
+async def get_name(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("choose_branch", lang), reply_markup=get_branch_keyboard(data.get('city', ''), lang))
+        await state.set_state(CashFSM.branch)
+        return
+    
+    await state.update_data(name=message.text)
+    await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+    await state.set_state(CashFSM.phone)
+
+async def get_phone(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CashFSM.name)
+        return
+    
+    await state.update_data(phone=message.text)
     
     # Получаем номер заявки (начиная с 1)
     request_number = await get_next_request_number()
@@ -237,7 +279,9 @@ async def get_branch(message: types.Message, state: FSMContext):
         f"💱 Операция: {data.get('operation', '')}\n"
         f"💰 Сумма: {data.get('amount', '')} USD\n"
         f"🏙️ Город: {data.get('city', '')}\n"
-        f"🏢 Отделение: {data.get('branch', '')}\n\n"
+        f"🏢 Отделение: {data.get('branch', '')}\n"
+        f"👤 Имя: {data.get('name', '')}\n"
+        f"📞 Телефон: {data.get('phone', '')}\n\n"
         f"📞 Менеджер свяжется с вами в ближайшее время для подтверждения деталей.",
         reply_markup=get_action_keyboard(lang)
     )
@@ -249,8 +293,8 @@ async def get_branch(message: types.Message, state: FSMContext):
         'city': data.get('city', ''),
         'branch': data.get('branch', ''),
         'time': 'Не указано',  # Время не запрашиваем
-        'name': 'Не указано',  # Имя не запрашиваем
-        'phone': 'Не указано',  # Телефон не запрашиваем
+        'name': data.get('name', ''),
+        'phone': data.get('phone', ''),
         'telegram': message.from_user.username or '',
         'request_number': request_number
     }
@@ -266,6 +310,8 @@ async def get_branch(message: types.Message, state: FSMContext):
     summary += f"💰 Сумма: {data.get('amount', '')} USD\n"
     summary += f"🏙️ Город: {data.get('city', '')}\n"
     summary += f"🏢 Отделение: {data.get('branch', '')}\n"
+    summary += f"👤 Имя: {data.get('name', '')}\n"
+    summary += f"📞 Телефон: {data.get('phone', '')}\n"
     summary += f"👤 Telegram: @{message.from_user.username or 'N/A'}"
     
     await message.bot.send_message(ADMIN_CHAT_ID, summary)
@@ -282,3 +328,5 @@ def register_cash_handlers(dp: Dispatcher):
     dp.message.register(get_amount, StateFilter(CashFSM.amount))
     dp.message.register(get_city, StateFilter(CashFSM.city))
     dp.message.register(get_branch, StateFilter(CashFSM.branch))
+    dp.message.register(get_name, StateFilter(CashFSM.name))
+    dp.message.register(get_phone, StateFilter(CashFSM.phone))
