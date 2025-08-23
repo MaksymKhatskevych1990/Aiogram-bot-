@@ -224,8 +224,13 @@ async def get_amount(message: types.Message, state: FSMContext):
                 parse_mode="Markdown"
             )
             
-            await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
-            await state.set_state(CryptoFSM.transaction_hash)
+            # Предлагаем пользователю выбрать способ проверки транзакции
+            from keyboards import get_transaction_image_keyboard
+            await message.answer(
+                get_message("choose_verification_method", lang),
+                reply_markup=get_transaction_image_keyboard(lang)
+            )
+            await state.set_state(CryptoFSM.verification)
         else:
             await message.answer(f"❌ Ошибка расчета комиссии: {commission_result['error']}")
 
@@ -272,6 +277,45 @@ async def get_client_wallet(message: types.Message, state: FSMContext):
     await state.update_data(client_wallet=message.text.strip())
     await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
     await state.set_state(CryptoFSM.contact)
+
+# Обработка выбора способа проверки транзакции
+async def handle_verification_choice(message: types.Message, state: FSMContext):
+    """
+    Обрабатывает выбор способа проверки транзакции
+    """
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.amount)
+        return
+    
+    if message.text == get_message("verify_by_image", lang):
+        # Пользователь выбрал проверку по изображению
+        from handlers.transaction_image import start_transaction_image_verification
+        await start_transaction_image_verification(message, state)
+        return
+    
+    elif message.text == get_message("enter_hash_manually", lang):
+        # Пользователь выбрал ввод хеша вручную
+        await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.transaction_hash)
+        return
+    
+    else:
+        # Неизвестная команда
+        from keyboards import get_transaction_image_keyboard
+        await message.answer(
+            get_message("choose_verification_method", lang),
+            reply_markup=get_transaction_image_keyboard(lang)
+        )
 
 # Обработка хеша транзакции
 async def get_transaction_hash(message: types.Message, state: FSMContext):
@@ -480,5 +524,6 @@ def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(get_amount, StateFilter(CryptoFSM.amount))
     dp.message.register(get_client_name, StateFilter(CryptoFSM.client_name))
     dp.message.register(get_client_wallet, StateFilter(CryptoFSM.client_wallet))
+    dp.message.register(handle_verification_choice, StateFilter(CryptoFSM.verification))
     dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
     dp.message.register(get_contact, StateFilter(CryptoFSM.contact))

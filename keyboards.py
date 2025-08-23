@@ -127,3 +127,26 @@ def get_cash_operation_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
     )
+
+def get_confirm_transaction_keyboard(lang="ru"):
+    """Клавиатура для подтверждения деталей транзакции"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=get_message("confirm", lang))],
+            [KeyboardButton(text=get_message("cancel", lang))],
+            [KeyboardButton(text=get_message("back", lang))]
+        ],
+        resize_keyboard=True
+    )
+
+def get_transaction_image_keyboard(lang="ru"):
+    """Клавиатура для работы с изображениями транзакций"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=get_message("verify_by_image", lang))],
+            [KeyboardButton(text=get_message("enter_hash_manually", lang))],
+            [KeyboardButton(text=get_message("back", lang))],
+            [KeyboardButton(text=get_message("back_to_main", lang))]
+        ],
+        resize_keyboard=True
+    )

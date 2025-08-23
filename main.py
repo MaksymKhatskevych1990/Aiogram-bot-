@@ -14,6 +14,7 @@ from config import TOKEN, GOOGLE_API_KEY, CSV_URL, REDIS_URL, REDIS_DB_FSM
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
+from handlers.transaction_image import register_transaction_image_handlers
 from utils.channel_rates import ChannelRatesParser
 
 # Use in-memory storage instead of Redis
@@ -39,6 +40,7 @@ def register_all_handlers(dp: Dispatcher):
     register_cash_handlers(dp)
     register_crypto_handlers(dp)
     register_start_handlers(dp)
+    register_transaction_image_handlers(dp)
 
 # 🚀 Запуск бота
 async def main():
