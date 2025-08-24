@@ -2,7 +2,7 @@ import logging
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env
+# Загружаем переменные из .env (для локальной разработки)
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -13,8 +13,8 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
 
-#Конфигурация бота
-TOKEN = os.getenv('TOKEN')
+# Конфигурация бота
+TOKEN = os.getenv('BOT_TOKEN') or os.getenv('TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 # URL для получения курсов валют
@@ -34,16 +34,53 @@ TRC20_CONFIRMATIONS = os.getenv('TRC20_CONFIRMATIONS')
 TRONSCAN_API = os.getenv('TRONSCAN_API')
 ERC20_CONFIRMATIONS = os.getenv('ERC20_CONFIRMATIONS')
 
+# Redis Configuration для Railway
+REDIS_URL = os.getenv('REDIS_URL', 'redis://default:pAnOMsKGoqPWMrIPncxfDgtcIWlTqXYu@redis-s59x.railway.internal:6379')
 
-REDIS_URL = os.getenv('REDIS_URL')
-REDISHOST = os.getenv('REDISHOST')
-REDISPASSWORD = os.getenv('REDISPASSWORD')
-REDISPORT = os.getenv('REDISPORT')
-REDIS_DB_FSM = os.getenv('REDIS_DB_FSM')
-REDIS_DB = os.getenv('REDIS_DB')
-REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX')
+# Парсим Redis URL для совместимости с существующим кодом
+if REDIS_URL:
+    try:
+        # Формат: redis://default:password@host:port
+        if REDIS_URL.startswith('redis://'):
+            parts = REDIS_URL.replace('redis://', '').split('@')
+            if len(parts) == 2:
+                auth_part = parts[0]
+                host_part = parts[1]
+                
+                if ':' in auth_part:
+                    username, password = auth_part.split(':', 1)
+                    REDISPASSWORD = password
+                else:
+                    REDISPASSWORD = None
+                
+                if ':' in host_part:
+                    host, port = host_part.split(':', 1)
+                    REDISHOST = host
+                    REDISPORT = int(port)
+                else:
+                    REDISHOST = host_part
+                    REDISPORT = 6379
+            else:
+                REDISHOST = 'localhost'
+                REDISPORT = 6379
+                REDISPASSWORD = None
+        else:
+            REDISHOST = 'localhost'
+            REDISPORT = 6379
+            REDISPASSWORD = None
+    except Exception as e:
+        logger.warning(f"Ошибка парсинга Redis URL: {e}")
+        REDISHOST = 'localhost'
+        REDISPORT = 6379
+        REDISPASSWORD = None
+else:
+    REDISHOST = os.getenv('REDISHOST', 'localhost')
+    REDISPORT = int(os.getenv('REDISPORT', 6379))
+    REDISPASSWORD = os.getenv('REDISPASSWORD')
 
-
+REDIS_DB_FSM = int(os.getenv('REDIS_DB_FSM', 0))
+REDIS_DB = int(os.getenv('REDIS_DB', 1))
+REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'bot')
 
 # ID чата администратора для заявок
 ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')  # Замените на реальный ID админ-группы

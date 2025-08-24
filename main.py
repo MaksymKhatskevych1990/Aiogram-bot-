@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 import csv
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
@@ -15,6 +16,18 @@ from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
+
+# Проверяем переменные окружения для Railway
+if not TOKEN:
+    raise ValueError("BOT_TOKEN не установлен! Установите переменную BOT_TOKEN в Railway.")
+
+if not REDIS_URL:
+    raise ValueError("REDIS_URL не установлен! Установите переменную REDIS_URL в Railway.")
+
+print(f"🔧 Конфигурация:")
+print(f"   - Redis URL: {REDIS_URL}")
+print(f"   - Redis DB FSM: {REDIS_DB_FSM}")
+print(f"   - Environment: {os.getenv('ENVIRONMENT', 'development')}")
 
 # Use in-memory storage instead of Redis
 # storage = MemoryStorage()
@@ -32,8 +45,6 @@ channel_rates_parser = ChannelRatesParser(bot, "@obmenvalut13")
 import utils.channel_rates
 utils.channel_rates.channel_rates_parser = channel_rates_parser
 
-
-
 # 👇 Регистрация всех хендлеров
 def register_all_handlers(dp: Dispatcher):
     register_cash_handlers(dp)
@@ -46,13 +57,25 @@ async def main():
         await bot.delete_webhook(drop_pending_updates=True)
         register_all_handlers(dp)
         print("🤖 Бот запущен...")
-        await dp.start_polling(bot)
+        print(f"🌍 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+        print(f"🔗 Redis: {REDIS_URL}")
+        
+        # Для Railway - используем webhook или polling
+        if os.getenv('ENVIRONMENT') == 'production':
+            print("🚂 Запуск в production режиме (Railway)")
+            # На Railway лучше использовать polling для простоты
+            await dp.start_polling(bot)
+        else:
+            print("💻 Запуск в development режиме")
+            await dp.start_polling(bot)
+            
     except Exception as e:
         if "Conflict: terminated by other getUpdates request" in str(e):
             print("❌ Ошибка: Уже запущен другой экземпляр бота!")
             print("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
         else:
             print(f"❌ Ошибка запуска бота: {e}")
+            raise e
 
 if __name__ == '__main__':
     try:
@@ -65,3 +88,4 @@ if __name__ == '__main__':
             print("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
         else:
             print(f'❌ Критическая ошибка: {e}')
+            raise e
