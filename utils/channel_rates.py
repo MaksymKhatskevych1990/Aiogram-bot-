@@ -8,7 +8,7 @@ from pathlib import Path
 from telethon import TelegramClient
 import importlib
 
-from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_URL, REDIS_DB, REDIS_KEY_PREFIX
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB, REDIS_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +40,24 @@ class ChannelRatesParser:
             TELEGRAM_API_HASH
         )
 
-        # Redis
-        self.redis_client = redis.Redis.from_url(
-            REDIS_URL, 
-            db=0,
-            decode_responses=True,
-            socket_timeout=3
-        )
+        # Redis - локальное подключение
+        if REDISPASSWORD:
+            self.redis_client = redis.Redis(
+                host=REDISHOST,
+                port=REDISPORT,
+                password=REDISPASSWORD,
+                db=REDIS_DB,
+                decode_responses=True,
+                socket_timeout=3
+            )
+        else:
+            self.redis_client = redis.Redis(
+                host=REDISHOST,
+                port=REDISPORT,
+                db=REDIS_DB,
+                decode_responses=True,
+                socket_timeout=3
+            )
         self.cache_ttl = 300  # 5 минут
 
     async def get_latest_rates(self) -> Dict[str, Dict]:
@@ -93,10 +104,9 @@ class ChannelRatesParser:
             logger.exception(f"Telethon ошибка: {e}")
             return None
         finally:
-            try:
-                await self.telethon_client.disconnect()
-            except Exception:
-                pass
+            # Убираем принудительное отключение - это может вызывать проблемы с сессией
+            # await self.telethon_client.disconnect()
+            pass
 
     def _extract_rates_from_text(self, text: str) -> Optional[Dict[str, Dict]]:
         """Парсим сообщение с курсами валют."""

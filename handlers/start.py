@@ -54,7 +54,6 @@ async def set_language(message: types.Message, state: FSMContext):
 
     await state.update_data(language=lang)
 
-
     user_name = message.from_user.first_name
 
     if lang == "ua":
@@ -78,19 +77,31 @@ async def set_language(message: types.Message, state: FSMContext):
 # Универсальный обработчик для кнопок навигации (работает в любом состоянии)
 async def handle_navigation_buttons(message: types.Message, state: FSMContext):
     """Обрабатывает кнопки навигации независимо от текущего состояния"""
+    
+    # ВАЖНО: Проверяем, что сообщение содержит текст
+    if not message.text:
+        # Если это не текстовое сообщение (например, фото), просто возвращаем False
+        return False
+    
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Получаем текст кнопки "Вернуться на главную"
+    back_to_main_text = get_message("back_to_main", lang)
+    
     # Проверяем кнопку "Вернуться на главную"
-    if get_message("back_to_main", lang) in message.text:
+    if back_to_main_text and back_to_main_text.strip() and back_to_main_text in message.text:
         action_message = get_message("choose_action", lang)
         if action_message:  # Проверяем, что сообщение не пустое
             await message.answer(action_message, reply_markup=get_action_keyboard(lang))
             await state.set_state(StartFSM.action)
             return True
     
+    # Получаем текст кнопки "Назад"
+    back_text = get_message("back", lang)
+    
     # Проверяем кнопку "Назад"
-    if get_message("back", lang) in message.text:
+    if back_text and back_text.strip() and back_text in message.text:
         # Проверяем, есть ли данные о языке
         if lang:
             start_message = get_message("please_press_start", lang)
@@ -110,6 +121,11 @@ async def choose_action(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     action = message.text
+
+    # Проверяем, что action не None
+    if not action:
+        await message.answer(get_message("invalid_action", lang))
+        return
 
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in action:
@@ -133,9 +149,6 @@ async def choose_action(message: types.Message, state: FSMContext):
         await show_current_rates(message, state)
     else:
         await message.answer(get_message("invalid_action", lang))
-
-
-
 
 async def show_current_rates(message: types.Message, state: FSMContext):
     """Показывает актуальные курсы валют из канала @obmenvalut13"""
@@ -189,7 +202,6 @@ async def show_current_rates(message: types.Message, state: FSMContext):
         await message.answer(get_message("currency_rates_error", lang))
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
 
-
 # Регистрируем хендлеры
 def register_start_handlers(dp: Dispatcher):
     dp.message.register(start_command, Command("start"))
@@ -198,5 +210,8 @@ def register_start_handlers(dp: Dispatcher):
     dp.message.register(choose_action, StateFilter(StartFSM.action))
     
     # Универсальный обработчик для кнопок навигации (работает как fallback)
-    # Регистрируем его с низким приоритетом
-    dp.message.register(handle_navigation_buttons, lambda message: True)
+    # Регистрируем его с низким приоритетом и только для текстовых сообщений
+    dp.message.register(
+        handle_navigation_buttons, 
+        lambda message: message.text is not None  # Только для текстовых сообщений
+    )

@@ -130,13 +130,11 @@ def get_cash_operation_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
 
 def get_confirm_transaction_keyboard(lang="ru"):
     """Клавиатура для подтверждения деталей транзакции"""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=get_message("confirm", lang))],
-            [KeyboardButton(text=get_message("cancel", lang))],
-            [KeyboardButton(text=get_message("back", lang))]
-        ],
-        resize_keyboard=True
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=get_message("confirm", lang), callback_data="confirm_tx")],
+            [InlineKeyboardButton(text=get_message("cancel", lang), callback_data="cancel_tx")],
+        ]
     )
 
 def get_transaction_image_keyboard(lang="ru"):

@@ -10,7 +10,7 @@ from aiogram import Bot
 from telethon import TelegramClient
 import sys
 from pathlib import Path
-from config import REDISHOST, REDISPASSWORD, REDIS_URL, REDIS_DB, REDIS_KEY_PREFIX
+from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB, REDIS_KEY_PREFIX
 import config  # твой конфиг с TELEGRAM_API_ID и TELEGRAM_API_HASH
 
 # 📌 Путь к файлу сессии Telethon — создаём сразу при загрузке модуля
@@ -24,13 +24,24 @@ class ChannelRatesParser:
         self.bot = bot
         self.channel_username = channel_username
 
-        # Redis
-        self.redis_client =redis.Redis.from_url(
-            REDIS_URL, 
-            db=0,
-            decode_responses=True,
-            socket_timeout=3
-        )
+        # Redis - локальное подключение
+        if REDISPASSWORD:
+            self.redis_client = redis.Redis(
+                host=REDISHOST,
+                port=REDISPORT,
+                password=REDISPASSWORD,
+                db=REDIS_DB,
+                decode_responses=True,
+                socket_timeout=3
+            )
+        else:
+            self.redis_client = redis.Redis(
+                host=REDISHOST,
+                port=REDISPORT,
+                db=REDIS_DB,
+                decode_responses=True,
+                socket_timeout=3
+            )
         self.cache_ttl = 300  # 5 минут кэш
 
         # Подгружаем API-ключи из config.py
@@ -83,10 +94,9 @@ class ChannelRatesParser:
             logger.exception("Telethon error")
             return None
         finally:
-            try:
-                await self.telethon_client.disconnect()
-            except Exception:
-                pass
+            # Убираем принудительное отключение - это может вызывать проблемы с сессией
+            # await self.telethon_client.disconnect()
+            pass
 
     def _extract_rates_from_text(self, text: str) -> Optional[Dict[str, Dict]]:
         """Парсит сообщение с курсами валют"""

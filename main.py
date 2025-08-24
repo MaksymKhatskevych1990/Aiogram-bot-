@@ -10,7 +10,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
 
-from config import TOKEN, GOOGLE_API_KEY, CSV_URL, REDIS_URL, REDIS_DB_FSM
+from config import TOKEN, GOOGLE_API_KEY, CSV_URL, REDISHOST, REDISPORT, REDISPASSWORD, REDIS_DB_FSM
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
@@ -19,7 +19,20 @@ from utils.channel_rates import ChannelRatesParser
 
 # Use in-memory storage instead of Redis
 # storage = MemoryStorage()
-redis_fsm = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
+# Redis FSM storage - локальное подключение
+if REDISPASSWORD:
+    redis_fsm = AsyncRedis(
+        host=REDISHOST, 
+        port=REDISPORT, 
+        password=REDISPASSWORD, 
+        db=REDIS_DB_FSM
+    )
+else:
+    redis_fsm = AsyncRedis(
+        host=REDISHOST, 
+        port=REDISPORT, 
+        db=REDIS_DB_FSM
+    )
 storage = RedisStorage(redis=redis_fsm)
 
 bot = Bot(token=TOKEN)

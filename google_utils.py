@@ -84,7 +84,15 @@ async def verify_transaction(tx_hash: str, network: str, target_address: str, us
     if network == "TRC20":
         return await check_tron_transaction(tx_hash, target_address)
     elif network == "ERC20":
+        # Запускаем асинхронную задачу для проверки ERC20
         check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
+        # Возвращаем успешный результат для ERC20, так как проверка происходит асинхронно
+        return {
+            "success": True,
+            "message": "Транзакция отправлена на проверку. Результат будет получен в течение нескольких минут.",
+            "tx_hash": tx_hash,
+            "network": network
+        }
     else:
         return {
             "success": False,

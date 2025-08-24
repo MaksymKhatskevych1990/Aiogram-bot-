@@ -35,14 +35,19 @@ TRONSCAN_API = os.getenv('TRONSCAN_API')
 ERC20_CONFIRMATIONS = os.getenv('ERC20_CONFIRMATIONS')
 
 
-REDIS_URL = os.getenv('REDIS_URL')
-REDISHOST = os.getenv('REDISHOST')
-REDISPASSWORD = os.getenv('REDISPASSWORD')
-REDISPORT = os.getenv('REDISPORT')
-REDIS_DB_FSM = os.getenv('REDIS_DB_FSM')
-REDIS_DB = os.getenv('REDIS_DB')
-REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX')
+# Redis конфигурация - локальные настройки
+REDISHOST = "localhost"  # или "127.0.0.1"
+REDISPORT = 6379
+REDISPASSWORD = None  # если пароль не установлен
+REDIS_DB = 0
+REDIS_DB_FSM = 1
+REDIS_KEY_PREFIX = "bot:"
 
+# Формируем локальный URL для Redis
+if REDISPASSWORD:
+    REDIS_URL = f"redis://:{REDISPASSWORD}@{REDISHOST}:{REDISPORT}"
+else:
+    REDIS_URL = f"redis://{REDISHOST}:{REDISPORT}"
 
 
 # ID чата администратора для заявок

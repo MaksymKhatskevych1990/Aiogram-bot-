@@ -73,23 +73,32 @@ class TransactionImageParser:
             return None
         
         try:
+            logger.info(f"🔍 Начинаем извлечение текста из изображения: {image_path}")
+            
             # Пробуем сначала с оригинальным изображением
             results = self.reader.readtext(image_path)
+            logger.info(f"🔍 OCR результаты (оригинал): {len(results)} блоков текста")
             
             if not results:
+                logger.info("🔍 OCR не дал результатов с оригиналом, пробуем предобработку")
                 # Если не получилось, пробуем с предобработанным изображением
                 processed_image = self.preprocess_image(image_path)
                 if processed_image is not None:
                     results = self.reader.readtext(processed_image)
+                    logger.info(f"🔍 OCR результаты (предобработка): {len(results)} блоков текста")
             
             # Объединяем все найденные тексты
             extracted_text = ""
             for (bbox, text, confidence) in results:
                 if confidence > 0.5:  # Фильтруем по уверенности
                     extracted_text += text + " "
+                    logger.info(f"🔍 Текст: '{text}' (уверенность: {confidence:.2f})")
+                else:
+                    logger.info(f"🔍 Текст отброшен из-за низкой уверенности: '{text}' (уверенность: {confidence:.2f})")
             
-            logger.info(f"✅ Текст извлечен из изображения: {extracted_text[:100]}...")
-            return extracted_text.strip()
+            final_text = extracted_text.strip()
+            logger.info(f"✅ Текст извлечен из изображения: {final_text[:100]}...")
+            return final_text
             
         except Exception as e:
             logger.error(f"❌ Ошибка извлечения текста: {e}")
@@ -106,7 +115,14 @@ class TransactionImageParser:
             Найденный хеш транзакции или None
         """
         if not text:
+            logger.warning("⚠️ Текст пустой для поиска хеша")
             return None
+        
+        # Очищаем текст от лишних символов
+        clean_text = re.sub(r'[^\w\s]', ' ', text)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+        
+        logger.info(f"🔍 Ищем хеш в очищенном тексте: {clean_text[:200]}...")
         
         # Паттерны для различных типов хешей транзакций
         hash_patterns = [
@@ -121,25 +137,51 @@ class TransactionImageParser:
         ]
         
         # Ищем по всем паттернам
-        for pattern in hash_patterns:
-            matches = re.findall(pattern, text)
+        for i, pattern in enumerate(hash_patterns):
+            matches = re.findall(pattern, clean_text)
             if matches:
                 # Берем первый найденный хеш
                 hash_found = matches[0]
-                logger.info(f"✅ Найден хеш транзакции: {hash_found}")
+                logger.info(f"✅ Найден хеш транзакции по паттерну {i+1}: {hash_found}")
                 return hash_found
         
+        logger.info("🔍 Хеш не найден по паттернам, ищем по ключевым словам")
+        
         # Если не нашли по паттернам, ищем по ключевым словам
-        keywords = ['TxID', 'Transaction ID', 'Хеш', 'ID транзакции', 'Hash']
+        keywords = ['TxID', 'Transaction ID', 'Хеш', 'ID транзакции', 'Hash', 'TxID']
         for keyword in keywords:
-            if keyword.lower() in text.lower():
+            if keyword.lower() in clean_text.lower():
+                logger.info(f"🔍 Найдено ключевое слово: {keyword}")
                 # Ищем текст после ключевого слова
                 pattern = rf'{re.escape(keyword)}[:\s]*([A-Fa-f0-9x]+)'
-                match = re.search(pattern, text, re.IGNORECASE)
+                match = re.search(pattern, clean_text, re.IGNORECASE)
                 if match:
                     hash_found = match.group(1)
                     logger.info(f"✅ Найден хеш по ключевому слову {keyword}: {hash_found}")
                     return hash_found
+        
+        logger.info("🔍 Хеш не найден по ключевым словам, ищем по частям")
+        
+        # Попробуем найти хеш по частям (если OCR разбил его)
+        # Ищем последовательности hex символов длиной от 16 до 64
+        hex_parts = re.findall(r'\b[A-Fa-f0-9]{16,}\b', clean_text)
+        if hex_parts:
+            logger.info(f"🔍 Найдены hex части: {hex_parts}")
+            # Сортируем по длине (самые длинные первыми)
+            hex_parts.sort(key=len, reverse=True)
+            for part in hex_parts:
+                if len(part) >= 32:  # Минимальная длина для хеша
+                    logger.info(f"✅ Найден потенциальный хеш по частям: {part}")
+                    return part
+        
+        logger.info("🔍 Хеш не найден по частям, ищем длинные последовательности")
+        
+        # Последняя попытка - ищем любые длинные последовательности hex
+        long_hex = re.findall(r'\b[A-Fa-f0-9]{20,}\b', clean_text)
+        if long_hex:
+            longest_hex = max(long_hex, key=len)
+            logger.info(f"✅ Найден длинный hex как потенциальный хеш: {longest_hex}")
+            return longest_hex
         
         logger.warning("⚠️ Хеш транзакции не найден в тексте")
         return None
@@ -165,12 +207,16 @@ class TransactionImageParser:
         }
         
         try:
+            logger.info(f"🔍 Начинаем извлечение деталей из изображения: {image_path}")
+            
             # Извлекаем текст
             text = self.extract_text_from_image(image_path)
             if not text:
                 result['error'] = "Не удалось извлечь текст из изображения"
+                logger.error("❌ Не удалось извлечь текст из изображения")
                 return result
             
+            logger.info(f"✅ Текст извлечен: {text[:200]}...")
             result['raw_text'] = text
             
             # Ищем хеш транзакции
@@ -178,20 +224,27 @@ class TransactionImageParser:
             if tx_hash:
                 result['hash'] = tx_hash
                 result['success'] = True
+                logger.info(f"✅ Хеш найден: {tx_hash}")
+            else:
+                logger.warning("⚠️ Хеш не найден")
             
             # Ищем сумму (паттерн для USDT, USD, UAH)
             amount_pattern = r'(\d+(?:\.\d+)?)\s*(USDT|USD|UAH|₴|\$)'
             amount_match = re.search(amount_pattern, text, re.IGNORECASE)
             if amount_match:
                 result['amount'] = f"{amount_match.group(1)} {amount_match.group(2)}"
+                logger.info(f"✅ Сумма найдена: {result['amount']}")
             
             # Определяем сеть по ключевым словам
             if 'TRX' in text.upper() or 'TRC20' in text.upper():
                 result['network'] = 'TRC20'
+                logger.info("✅ Сеть определена: TRC20")
             elif 'ERC20' in text.upper() or 'ETH' in text.upper():
                 result['network'] = 'ERC20'
+                logger.info("✅ Сеть определена: ERC20")
             elif 'BSC' in text.upper() or 'BNB' in text.upper():
                 result['network'] = 'BSC'
+                logger.info("✅ Сеть определена: BSC")
             
             # Ищем адрес кошелька (паттерн для различных сетей)
             address_patterns = [
@@ -204,6 +257,7 @@ class TransactionImageParser:
                 addresses = re.findall(pattern, text)
                 if addresses:
                     result['address'] = addresses[0]
+                    logger.info(f"✅ Адрес найден: {result['address']}")
                     break
             
             logger.info(f"✅ Детали транзакции извлечены: {result}")

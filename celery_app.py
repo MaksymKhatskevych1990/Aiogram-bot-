@@ -1,10 +1,16 @@
 from celery import Celery
-from config import REDIS_URL
+from config import REDISHOST, REDISPORT, REDISPASSWORD
+
+# Формируем локальные URL для Redis
+if REDISPASSWORD:
+    redis_url = f"redis://:{REDISPASSWORD}@{REDISHOST}:{REDISPORT}"
+else:
+    redis_url = f"redis://{REDISHOST}:{REDISPORT}"
 
 celery_app = Celery(
     "tasks",
-    broker=f"{REDIS_URL}/0",  # брокер задач
-    backend=f"{REDIS_URL}/1", # результат и статусы задач
+    broker=f"{redis_url}/0",  # брокер задач
+    backend=f"{redis_url}/1", # результат и статусы задач
     include=["tasks"]
 )
 
@@ -21,5 +27,5 @@ celery_app.conf.update(
     }
 )
 
-# if __name__ == '__main__':
-#     celery_app.start()
+if __name__ == '__main__':
+    celery_app.start()

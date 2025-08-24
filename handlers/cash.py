@@ -15,12 +15,26 @@ from utils.fiat_rates import get_usd_uah_rates
 from utils.commission_calculator import commission_calculator
 from google_utils import save_cash_exchange_request_to_sheet
 from localization import get_message
-from config import REDIS_URL
+from config import REDISHOST, REDISPORT, REDISPASSWORD, REDIS_DB
 import redis
 
 # Инициализация Redis для хранения счетчика заявок
 try:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
+    if REDISPASSWORD:
+        r = redis.Redis(
+            host=REDISHOST, 
+            port=REDISPORT, 
+            password=REDISPASSWORD, 
+            db=REDIS_DB, 
+            decode_responses=True
+        )
+    else:
+        r = redis.Redis(
+            host=REDISHOST, 
+            port=REDISPORT, 
+            db=REDIS_DB, 
+            decode_responses=True
+        )
     # Проверяем подключение
     r.ping()
     print("✅ Redis подключен успешно")
@@ -98,6 +112,12 @@ async def start_cash(message: types.Message, state: FSMContext):
 async def get_operation(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_cash_operation", lang), reply_markup=get_cash_operation_keyboard(lang))
+        return
+        
     text = message.text
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
@@ -124,6 +144,12 @@ async def get_operation(message: types.Message, state: FSMContext):
 async def get_currency(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_currency", lang), reply_markup=get_currency_keyboard_with_back(lang))
+        return
+    
     # Обработка кнопки "Назад"
     if get_message("back", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
@@ -137,6 +163,11 @@ async def get_currency(message: types.Message, state: FSMContext):
 async def get_amount(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        return
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
@@ -195,6 +226,11 @@ async def get_city(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_city_branch", lang), reply_markup=get_city_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
@@ -214,6 +250,11 @@ async def get_city(message: types.Message, state: FSMContext):
 async def get_branch(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_branch", lang), reply_markup=get_branch_keyboard(data.get('city', ''), lang))
+        return
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
@@ -235,6 +276,11 @@ async def get_name(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
@@ -254,6 +300,11 @@ async def get_name(message: types.Message, state: FSMContext):
 async def get_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+        return
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:

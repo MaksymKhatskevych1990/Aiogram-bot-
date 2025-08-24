@@ -99,98 +99,6 @@ MESSAGES = {
         "ua": "✅ Транзакція підтверджена!\n\n📊 Сума: {amount}\n👤 Від: {from_addr}\n📅 Час: {timestamp}\n\nТепер вкажіть ваш контакт для зв'язку (номер телефону або Telegram).",
         "en": "✅ Transaction confirmed!\n\n📊 Amount: {amount}\n👤 From: {from_addr}\n📅 Time: {timestamp}\n\nNow provide your contact for communication (phone number or Telegram)."
     },
-    
-    # Сообщения для работы с изображениями транзакций
-    "verify_by_image": {
-        "ru": "📸 Проверить по изображению",
-        "ua": "📸 Перевірити за зображенням",
-        "en": "📸 Verify by image"
-    },
-    "enter_hash_manually": {
-        "ru": "✏️ Ввести хеш вручную",
-        "ua": "✏️ Ввести хеш вручну",
-        "en": "✏️ Enter hash manually"
-    },
-    "send_transaction_image": {
-        "ru": "📸 Отправьте скриншот транзакции (чека, детали перевода, экран кошелька)\n\n💡 Бот автоматически извлечет хеш транзакции и другие детали",
-        "ua": "📸 Надішліть скріншот транзакції (чека, деталі переказу, екран гаманця)\n\n💡 Бот автоматично витягне хеш транзакції та інші деталі",
-        "en": "📸 Send a screenshot of the transaction (receipt, transfer details, wallet screen)\n\n💡 The bot will automatically extract the transaction hash and other details"
-    },
-    "please_send_image": {
-        "ru": "❌ Пожалуйста, отправьте изображение транзакции",
-        "ua": "❌ Будь ласка, надішліть зображення транзакції",
-        "en": "❌ Please send a transaction image"
-    },
-    "processing_image": {
-        "ru": "🔍 Обрабатываю изображение...\n⏳ Это может занять несколько секунд",
-        "ua": "🔍 Обробляю зображення...\n⏳ Це може зайняти декілька секунд",
-        "en": "🔍 Processing image...\n⏳ This may take a few seconds"
-    },
-    "failed_to_extract_hash": {
-        "ru": "❌ Не удалось извлечь хеш транзакции из изображения\n\nОшибка: {error}\n\n💡 Попробуйте:\n• Отправить более четкое изображение\n• Убедиться, что хеш транзакции виден на скриншоте\n• Ввести хеш вручную",
-        "ua": "❌ Не вдалося витягти хеш транзакції з зображення\n\nПомилка: {error}\n\n💡 Спробуйте:\n• Надіслати більш чітке зображення\n• Переконатися, що хеш транзакції видно на скріншоті\n• Ввести хеш вручну",
-        "en": "❌ Failed to extract transaction hash from image\n\nError: {error}\n\n💡 Try:\n• Sending a clearer image\n• Making sure the transaction hash is visible in the screenshot\n• Entering the hash manually"
-    },
-    "transaction_details_found": {
-        "ru": "✅ Детали транзакции найдены!",
-        "ua": "✅ Деталі транзакції знайдено!",
-        "en": "✅ Transaction details found!"
-    },
-    "confirm_transaction_details": {
-        "ru": "Пожалуйста, подтвердите детали транзакции:",
-        "ua": "Будь ласка, підтвердіть деталі транзакції:",
-        "en": "Please confirm the transaction details:"
-    },
-    "confirm": {
-        "ru": "✅ Подтвердить",
-        "ua": "✅ Підтвердити",
-        "en": "✅ Confirm"
-    },
-    "cancel": {
-        "ru": "❌ Отменить",
-        "ua": "❌ Скасувати",
-        "en": "❌ Cancel"
-    },
-    "verifying_transaction": {
-        "ru": "🔍 Проверяю транзакцию в блокчейне...",
-        "ua": "🔍 Перевіряю транзакцію в блокчейні...",
-        "en": "🔍 Verifying transaction in blockchain..."
-    },
-    "transaction_verified_success": {
-        "ru": "✅ Транзакция успешно проверена и сохранена!\n\nТеперь укажите ваш контакт для связи (номер телефона или Telegram).",
-        "ua": "✅ Транзакцію успішно перевірено та збережено!\n\nТепер вкажіть ваш контакт для зв'язку (номер телефону або Telegram).",
-        "en": "✅ Transaction successfully verified and saved!\n\nNow provide your contact for communication (phone number or Telegram)."
-    },
-    "transaction_verification_failed": {
-        "ru": "❌ Не удалось проверить транзакцию\n\nОшибка: {error}\n\n💡 Попробуйте:\n• Проверить правильность хеша\n• Убедиться, что транзакция прошла успешно\n• Обратиться в поддержку",
-        "ua": "❌ Не вдалося перевірити транзакцію\n\nПомилка: {error}\n\n💡 Спробуйте:\n• Перевірити правильність хеша\n• Переконатися, що транзакція пройшла успішно\n• Звернутися в підтримку",
-        "en": "❌ Failed to verify transaction\n\nError: {error}\n\n💡 Try:\n• Checking hash correctness\n• Making sure the transaction was successful\n• Contacting support"
-    },
-    "error_processing_image": {
-        "ru": "❌ Произошла ошибка при обработке изображения\n\nПопробуйте отправить изображение еще раз или ввести хеш вручную",
-        "ua": "❌ Сталася помилка при обробці зображення\n\nСпробуйте надіслати зображення ще раз або ввести хеш вручну",
-        "en": "❌ An error occurred while processing the image\n\nTry sending the image again or enter the hash manually"
-    },
-    "error_verifying_transaction": {
-        "ru": "❌ Произошла ошибка при проверке транзакции\n\nПопробуйте позже или обратитесь в поддержку",
-        "ua": "❌ Сталася помилка при перевірці транзакції\n\nСпробуйте пізніше або зверніться в підтримку",
-        "en": "❌ An error occurred while verifying the transaction\n\nTry later or contact support"
-    },
-    "transaction_cancelled": {
-        "ru": "❌ Проверка транзакции отменена",
-        "ua": "❌ Перевірка транзакції скасована",
-        "en": "❌ Transaction verification cancelled"
-    },
-    "please_confirm_or_cancel": {
-        "ru": "Пожалуйста, подтвердите или отмените детали транзакции",
-        "ua": "Будь ласка, підтвердіть або скасуйте деталі транзакції",
-        "en": "Please confirm or cancel the transaction details"
-    },
-    "choose_verification_method": {
-        "ru": "🔍 Выберите способ проверки транзакции:",
-        "ua": "🔍 Оберіть спосіб перевірки транзакції:",
-        "en": "🔍 Choose transaction verification method:"
-    },
     "tx_not_confirmed": {
         "ru": "❌ Транзакция не подтверждена!\n\n🔍 Ошибка: {error}\n\nВозможные причины:\n• Транзакция еще не прошла\n• Неверный хеш транзакции\n• Транзакция отправлена на другой адрес\n• Проблемы с сетью\n\nПопробуйте еще раз или обратитесь в поддержку.",
         "ua": "❌ Транзакція не підтверджена!\n\n🔍 Помилка: {error}\n\nМожливі причини:\n• Транзакція ще не пройшла\n• Невірний хеш транзакції\n• Транзакція відправлена на іншу адресу\n• Проблеми з мережею\n\nСпробуйте ще раз або зверніться в підтримку.",
@@ -436,10 +344,125 @@ MESSAGES = {
         "ua": "👤 Введіть ваше ім'я:",
         "en": "👤 Enter your name:"
     },
+    "verify_by_image": {
+        "ru": "📷 Проверить по изображению",
+        "ua": "📷 Перевірити за зображенням",
+        "en": "📷 Verify by image"
+    },
+    "enter_hash_manually": {
+        "ru": "✏️ Ввести хеш вручную",
+        "ua": "✏️ Ввести хеш вручну",
+        "en": "✏️ Enter hash manually"
+    },
+    "choose_verification_method": {
+        "ru": "Выберите способ проверки транзакции:",
+        "ua": "Оберіть спосіб перевірки транзакції:",
+        "en": "Choose transaction verification method:"
+    },
+    "send_transaction_image": {
+        "ru": "📷 Пожалуйста, отправьте изображение транзакции:",
+        "ua": "📷 Будь ласка, надішліть зображення транзакції:",
+        "en": "📷 Please send the transaction image:"
+    },
+    "please_send_image": {
+        "ru": "❌ Пожалуйста, отправьте изображение транзакции",
+        "ua": "❌ Будь ласка, надішліть зображення транзакції",
+        "en": "❌ Please send a transaction image"
+    },
+    "processing_image": {
+        "ru": "🔍 Обрабатываем изображение...",
+        "ua": "🔍 Обробляємо зображення...",
+        "en": "🔍 Processing image..."
+    },
+    "transaction_details_found": {
+        "ru": "✅ Детали транзакции найдены:",
+        "ua": "✅ Деталі транзакції знайдено:",
+        "en": "✅ Transaction details found:"
+    },
+    "confirm_transaction_details": {
+        "ru": "Подтвердите правильность данных:",
+        "ua": "Підтвердьте правильність даних:",
+        "en": "Confirm data accuracy:"
+    },
+    "confirm": {
+        "ru": "✅ Подтвердить",
+        "ua": "✅ Підтвердити",
+        "en": "✅ Confirm"
+    },
+    "cancel": {
+        "ru": "❌ Отменить",
+        "ua": "❌ Скасувати",
+        "en": "❌ Cancel"
+    },
+    "failed_to_extract_hash": {
+        "ru": "❌ Не удалось извлечь хеш транзакции: {error}",
+        "ua": "❌ Не вдалося витягти хеш транзакції: {error}",
+        "en": "❌ Failed to extract transaction hash: {error}"
+    },
+    "error_processing_image": {
+        "ru": "❌ Ошибка при обработке изображения",
+        "ua": "❌ Помилка при обробці зображення",
+        "en": "❌ Error processing image"
+    },
+    "verifying_transaction": {
+        "ru": "🔍 Проверяем транзакцию...",
+        "ua": "🔍 Перевіряємо транзакцію...",
+        "en": "🔍 Verifying transaction..."
+    },
+    "transaction_verified_success": {
+        "ru": "✅ Транзакция успешно проверена!",
+        "ua": "✅ Транзакцію успішно перевірено!",
+        "en": "✅ Transaction successfully verified!"
+    },
+    "transaction_verification_failed": {
+        "ru": "❌ Проверка транзакции не удалась: {error}",
+        "ua": "❌ Перевірка транзакції не вдалася: {error}",
+        "en": "❌ Transaction verification failed: {error}"
+    },
+    "error_verifying_transaction": {
+        "ru": "❌ Ошибка при проверке транзакции",
+        "ua": "❌ Помилка при перевірці транзакції",
+        "en": "❌ Error verifying transaction"
+    },
+    "transaction_cancelled": {
+        "ru": "❌ Проверка транзакции отменена",
+        "ua": "❌ Перевірку транзакції скасовано",
+        "en": "❌ Transaction verification cancelled"
+    },
+    "please_confirm_or_cancel": {
+        "ru": "Пожалуйста, подтвердите или отмените операцию",
+        "ua": "Будь ласка, підтвердьте або скасуйте операцію",
+        "en": "Please confirm or cancel the operation"
+    },
+    "enter_tx_hash": {
+        "ru": "Введите хеш транзакции:",
+        "ua": "Введіть хеш транзакції:",
+        "en": "Enter transaction hash:"
+    },
+    "invalid_tx_hash": {
+        "ru": "❌ Неверный формат хеша транзакции",
+        "ua": "❌ Невірний формат хешу транзакції",
+        "en": "❌ Invalid transaction hash format"
+    },
+    "checking_tx": {
+        "ru": "🔍 Проверяем транзакцию в блокчейне...",
+        "ua": "🔍 Перевіряємо транзакцію в блокчейні...",
+        "en": "🔍 Checking transaction in blockchain..."
+    },
+    "invalid_tx_format": {
+        "ru": "❌ Неверный формат хеша для выбранной сети",
+        "ua": "❌ Невірний формат хешу для обраної мережі",
+        "en": "❌ Invalid hash format for selected network"
+    }
 }
 
 def get_message(key, lang="ru", **kwargs):
     text = MESSAGES.get(key, {}).get(lang)
     if not text:
         text = MESSAGES.get(key, {}).get("ru", "")
+    
+    # Дополнительная проверка на пустую строку
+    if not text:
+        text = f"[{key}]"  # Fallback для отладки
+    
     return text.format(**kwargs) if kwargs else text

@@ -4,13 +4,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-
-
+from handlers.start import StartFSM
 
 from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, update_transaction_status
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
-from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard
+from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard, get_transaction_image_keyboard
 from utils.generate_qr_code import generate_wallet_qr
 from utils.commission_calculator import commission_calculator
 from localization import get_message
@@ -39,18 +38,22 @@ async def start_crypto(message: types.Message, state: FSMContext):
 async def set_crypto_operation(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_crypto_operation", lang), reply_markup=get_crypto_operation_keyboard(lang))
+        return
+        
     text = message.text
     
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
     if get_message("back", lang) in text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -66,10 +69,14 @@ async def get_network(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("choose_network", lang), reply_markup=get_network_keyboard_with_back(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -112,10 +119,14 @@ async def get_amount(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -225,7 +236,6 @@ async def get_amount(message: types.Message, state: FSMContext):
             )
             
             # Предлагаем пользователю выбрать способ проверки транзакции
-            from keyboards import get_transaction_image_keyboard
             await message.answer(
                 get_message("choose_verification_method", lang),
                 reply_markup=get_transaction_image_keyboard(lang)
@@ -239,10 +249,14 @@ async def get_client_name(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_name", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -263,10 +277,14 @@ async def get_client_wallet(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_wallet", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -286,9 +304,16 @@ async def handle_verification_choice(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(
+            get_message("choose_verification_method", lang),
+            reply_markup=get_transaction_image_keyboard(lang)
+        )
+        return
+    
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -311,7 +336,6 @@ async def handle_verification_choice(message: types.Message, state: FSMContext):
     
     else:
         # Неизвестная команда
-        from keyboards import get_transaction_image_keyboard
         await message.answer(
             get_message("choose_verification_method", lang),
             reply_markup=get_transaction_image_keyboard(lang)
@@ -322,10 +346,14 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -419,10 +447,15 @@ async def get_contact(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("language", "ru")
     logger.info(f"[crypto] -------   get_contact data: {data}")
+    
+    # Проверяем, что сообщение содержит текст
+    if not message.text:
+        await message.answer(get_message("enter_phone", lang), reply_markup=get_back_keyboard(lang))
+        return
+    
     # ВАЖНО: сначала проверяем кнопку "Вернуться на главную"
     if get_message("back_to_main", lang) in message.text:
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         return
     
@@ -471,7 +504,6 @@ async def get_contact(message: types.Message, state: FSMContext):
         
         # Показываем главное меню вместо очистки состояния
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
-        from handlers.start import StartFSM
         await state.set_state(StartFSM.action)
         
     else:
