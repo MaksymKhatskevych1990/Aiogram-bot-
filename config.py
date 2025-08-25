@@ -35,7 +35,7 @@ TRONSCAN_API = os.getenv('TRONSCAN_API')
 ERC20_CONFIRMATIONS = os.getenv('ERC20_CONFIRMATIONS')
 
 # Redis Configuration для Railway
-REDIS_URL = os.getenv('REDIS_URL', 'redis://default:pAnOMsKGoqPWMrIPncxfDgtcIWlTqXYu@redis-s59x.railway.internal:6379')
+REDIS_URL = os.getenv('REDIS_URL')
 
 # Парсим Redis URL для совместимости с существующим кодом
 if REDIS_URL:
