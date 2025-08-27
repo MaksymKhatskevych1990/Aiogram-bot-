@@ -320,31 +320,31 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     )
     
     # # Обрабатываем результат верификации
-    # if verification_result.get("success"):
-    #     await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
-    #     await message.answer(
-    #         get_message(
-    #             "tx_confirmed", lang,
-    #             amount=verification_result.get('amount', 'N/A'),
-    #             from_addr=verification_result.get('from', 'N/A')[:10] + '...',
-    #             timestamp=verification_result.get('timestamp', 'N/A')
-    #         ),
-    #         reply_markup=get_back_keyboard(lang)
-    #     )
-    #     save_transaction_hash(
-    #         message.from_user.username or str(message.from_user.id),
-    #         tx_hash,
-    #         wallet_address,
-    #         "PENDING"
-    #     )
-    #     await state.set_state(CryptoFSM.contact)
-    # else:
-    #     error_msg = verification_result.get("error", "Неизвестная ошибка")
-    #     await message.answer(
-    #         get_message("tx_not_confirmed", lang, error=error_msg),
-    #         reply_markup=get_back_keyboard(lang)
-    #     )
-    #     await state.set_state(CryptoFSM.transaction_hash)
+    if verification_result.get("success"):
+        await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
+        await message.answer(
+            get_message(
+                "tx_confirmed", lang,
+                amount=verification_result.get('amount', 'N/A'),
+                from_addr=verification_result.get('from', 'N/A')[:10] + '...',
+                timestamp=verification_result.get('timestamp', 'N/A')
+            ),
+            reply_markup=get_back_keyboard(lang)
+        )
+        save_transaction_hash(
+            message.from_user.username or str(message.from_user.id),
+            tx_hash,
+            wallet_address,
+            "PENDING"
+        )
+        await state.set_state(CryptoFSM.contact)
+    else:
+        error_msg = verification_result.get("error", "Неизвестная ошибка")
+        await message.answer(
+            get_message("tx_not_confirmed", lang, error=error_msg),
+            reply_markup=get_back_keyboard(lang)
+        )
+        await state.set_state(CryptoFSM.transaction_hash)
 
 async def send_telegram_notification(chat_id: str, msg):
     from aiogram import Bot
@@ -449,26 +449,26 @@ async def get_contact(message: types.Message, state: FSMContext):
         )
         print(f"Отправляю сообщение администратору в чат: {ADMIN_CHAT_ID}")
         # Сохраняем заявку в Google Sheets ДО очистки state!
-        # row_data = {
-        #     'currency': 'USDT',  # по умолчанию
-        #     'amount': data.get('amount_result', data.get('amount', '')),
-        #     'network': data.get('network', ''),
-        #     'wallet_address': data.get('wallet_address', ''),
-        #     'visit_time': '',  # если нет - оставляем пустым
-        #     'client_name': '', # если нет - оставляем пустым
-        #     'phone': data.get('contact', ''),
-        #     'telegram': message.from_user.username or ''
-        # }
+        row_data = {
+            'currency': 'USDT',  # по умолчанию
+            'amount': data.get('amount_result', data.get('amount', '')),
+            'network': data.get('network', ''),
+            'wallet_address': data.get('wallet_address', ''),
+            'visit_time': '',  # если нет - оставляем пустым
+            'client_name': '', # если нет - оставляем пустым
+            'phone': data.get('contact', ''),
+            'telegram': message.from_user.username or ''
+        }
 
         # Пытаемся записать в таблицу
-        # success = save_crypto_request_to_sheet(row_data)
+        success = save_crypto_request_to_sheet(row_data)
         change_param = f"{str(data.get('contact', ''))}/{message.from_user.username or ''}"
         google_update_params = {
             "contact": [change_param, 9]
         }
         success = update_transaction_status(data['transaction_hash'], google_update_params)
-        # if not success:
-        #     await message.answer(get_message("google_sheet_error", lang))
+        if not success:
+            await message.answer(get_message("google_sheet_error", lang))
 
         await state.clear()
 
