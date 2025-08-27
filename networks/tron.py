@@ -33,7 +33,7 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
                 if data.get("confirmed") is not True:
                     return {"success": False, "error": "Транзакция не подтверждена"}
 
-                confirmations = data.get("confirmations", 0)
+                confirmations = int(data.get("confirmations", 0))
                 if confirmations < TRC20_CONFIRMATIONS:
                     return {"success": False, "error": f"Недостаточно подтверждений: {confirmations}/{TRC20_CONFIRMATIONS}"}
 

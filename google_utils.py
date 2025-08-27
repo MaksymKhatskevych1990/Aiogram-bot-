@@ -45,8 +45,7 @@ TRONSCAN_API = "https://api.tronscan.org/api"
 ETHERSCAN_API = "https://api.etherscan.io/api"
 
 # Настройки количества подтверждений
-TRC20_CONFIRMATIONS = 1
-ERC20_CONFIRMATIONS = 6
+from config import TRC20_CONFIRMATIONS, ERC20_CONFIRMATIONS
 
 def get_wallet_address(network: str) -> str:
     """

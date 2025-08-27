@@ -32,7 +32,7 @@ BSCSCAN_API_KEY = os.getenv('BSCSCAN_API_KEY')
 
 TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
 TRONSCAN_API = os.getenv('TRONSCAN_API')
-TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
+ERC20_CONFIRMATIONS = int(os.getenv('ERC20_CONFIRMATIONS', '12'))
 
 # Redis Configuration для Railway
 REDIS_URL = os.getenv('REDIS_URL')
