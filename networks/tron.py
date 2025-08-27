@@ -1,6 +1,8 @@
 # tron.py
 import aiohttp
 import datetime
+import json
+import re
 from typing import Optional, Dict, Any
 
 from config import TRONSCAN_API, TRC20_CONFIRMATIONS, logger
@@ -29,7 +31,19 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
                 if response.status != 200:
                     return {"success": False, "error": f"Ошибка API: {response.status}"}
 
-                data = await response.json()
+                # Пробуем сразу распарсить JSON
+                try:
+                    data = await response.json()
+                except Exception as e:
+                    # Если JSON «грязный» — чистим и парсим вручную
+                    raw_text = await response.text()
+                    cleaned_text = re.sub(r'";', '"', raw_text)
+                    try:
+                        data = json.loads(cleaned_text)
+                    except Exception as e2:
+                        logger.error("Ошибка парсинга JSON TronScan: %s", e2)
+                        return {"success": False, "error": "Некорректный ответ от TronScan API"}
+
                 logger.info("TRON raw data: %s", data)
 
                 if data.get("confirmed") is not True:
@@ -58,7 +72,6 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
                     return {"success": False, "error": "Транзакция не относится к USDT (TRC20)"}
 
                 logger.info("Checking to_address: %s vs target: %s", transfer.get("to_address"), target_address)
-                logger.info("Address comparison: %s == %s = %s", transfer.get("to_address"), target_address, transfer.get("to_address") == target_address)
                 if transfer.get("to_address") != target_address:
                     logger.info("Address mismatch - returning error")
                     return {"success": False, "error": "Токены отправлены на другой адрес"}
@@ -88,5 +101,4 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
 
     except Exception as e:
         logger.exception("Ошибка при проверке TRON транзакции")
-        logger.error("Exception details: %s, Type: %s", str(e), type(e))
         return {"success": False, "error": f"Ошибка проверки транзакции: {str(e)}"}
