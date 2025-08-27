@@ -30,9 +30,9 @@ ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY')
 BSCSCAN_API_KEY = os.getenv('BSCSCAN_API_KEY')
 # TRONSCAN не требует API ключа для базовых запросов
 
-TRC20_CONFIRMATIONS = os.getenv('TRC20_CONFIRMATIONS')
+TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
 TRONSCAN_API = os.getenv('TRONSCAN_API')
-ERC20_CONFIRMATIONS = os.getenv('ERC20_CONFIRMATIONS')
+TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
 
 # Redis Configuration для Railway
 REDIS_URL = os.getenv('REDIS_URL')
