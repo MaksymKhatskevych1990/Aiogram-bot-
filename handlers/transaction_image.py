@@ -110,14 +110,24 @@ async def handle_transaction_image(message: types.Message, state: FSMContext):
         await state.set_state(TransactionImageFSM.processing)
         
         # Извлекаем детали транзакции
+        logger.info(f"🔍 Начинаем извлечение деталей из изображения")
         transaction_details = transaction_parser.extract_transaction_details(temp_path)
+        logger.info(f"🔍 Результат извлечения деталей: {transaction_details}")
         
         # Удаляем временный файл
         os.unlink(temp_path)
         
         if not transaction_details['success']:
+            error_msg = transaction_details.get('error', 'Неизвестная ошибка')
+            logger.error(f"❌ Не удалось извлечь хеш: {error_msg}")
+            logger.error(f"❌ Полный результат: {transaction_details}")
+            
+            # Если есть raw_text, показываем его для отладки
+            if transaction_details.get('raw_text'):
+                logger.info(f"🔍 Извлеченный текст: {transaction_details['raw_text'][:500]}...")
+            
             await message.answer(
-                get_message("failed_to_extract_hash", lang, error=transaction_details.get('error', 'Неизвестная ошибка')),
+                get_message("failed_to_extract_hash", lang, error=error_msg),
                 reply_markup=get_back_keyboard(lang)
             )
             # ВАЖНО: Возвращаемся к состоянию verification, а не очищаем состояние

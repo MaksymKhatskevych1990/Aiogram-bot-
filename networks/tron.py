@@ -57,7 +57,7 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
                 decimals = int(transfer.get("decimals", 6))
                 amount = raw_amount / (10 ** decimals)
 
-                timestamp_ms = data.get("timestamp", 0)
+                timestamp_ms = int(data.get("timestamp", 0))
                 dt = datetime.datetime.fromtimestamp(timestamp_ms / 1000)
 
                 return {
