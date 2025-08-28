@@ -10,7 +10,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-from config import REDISHOST, REDISPASSWORD, REDISPORT, REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX, REDIS_URL
+from config import REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX, REDIS_URL
 # Conditional import for Celery
 try:
     from celery_app import celery_app
@@ -38,7 +38,7 @@ from config import logger
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
 MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
 
-r = redis.Redis.from_url(REDIS_URL, db=0, decode_responses=True)
+r = redis.Redis.from_url(REDIS_URL, db=REDIS_DB, decode_responses=True)
 
 # async loop infra
 _loop = None
