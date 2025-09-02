@@ -77,12 +77,13 @@ def get_wallet_address(network: str) -> str:
         return None
 
 async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
-    from tasks import check_erc20_confirmation_task
+    from tasks.erc20_tasks import check_erc20_confirmation_task
+    from tasks.trc20_tasks import check_trc20_confirmation_task
     """
     Проверяет транзакцию в зависимости от сети
     """
     if network == "TRC20":
-        return await check_tron_transaction(tx_hash, target_address)
+        check_trc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
     elif network == "ERC20":
         check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
     else:

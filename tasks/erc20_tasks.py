@@ -10,7 +10,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-from config import REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX, REDIS_URL
+from config import REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX_ERC, REDIS_URL
 # Conditional import for Celery
 try:
     from celery_app import celery_app
@@ -63,7 +63,7 @@ def run_async_coroutine(coro, timeout=40):
     return future.result(timeout=timeout)
 
 def _redis_key(tx_hash: str) -> str:
-    return f"{REDIS_KEY_PREFIX}{tx_hash}"
+    return f"{REDIS_KEY_PREFIX_ERC}{tx_hash}"
 
 def _touch_ttl(key: str):
     if r:
@@ -206,7 +206,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
                 "timestamp": result.get("timestamp", "N/A"),
             }
             if code == "invalid_token":
-                msg.update({"msg_status": "invalid_token"})
+                msg.update({"msg_status": "invalid_token_erc"})
             else:
                 msg.update({"msg_status": "invalid_recipient"})
                 
@@ -225,7 +225,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
             _update_error(key, "internal_error", str(e))
 
 @celery_task_fallback
-def periodic_check_pending_transactions():
+def periodic_check_pending_transactions_erc20():
     if not r:
         logger.error("Redis недоступен для periodic_check_pending_transactions")
         return
@@ -237,7 +237,7 @@ def periodic_check_pending_transactions():
     Периодический обход всех pending транзакций.
     """
     try:
-        keys = r.keys(f"{REDIS_KEY_PREFIX}*")
+        keys = r.keys(f"{REDIS_KEY_PREFIX_ERC}*")
         for key in keys:
             tx_data = r.hgetall(key)
             if not tx_data:
@@ -264,7 +264,7 @@ def periodic_check_pending_transactions():
                 result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
                 logger.info(f"[BEAT] {tx_hash} result: {result}")
 
-                if result.get("success"):
+                if result.get("success") and result.get("status") == "confirmed":
                     google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5]}
                     msg = {
                         "msg_status": "tx_confirmed",
@@ -306,7 +306,7 @@ def periodic_check_pending_transactions():
                         "timestamp": result.get("timestamp", "N/A"),
                     }
                     if code == "invalid_token":
-                        msg.update({"msg_status": "invalid_token"})
+                        msg.update({"msg_status": "invalid_token_erc"})
                     else:
                         msg.update({"msg_status": "invalid_recipient"})
                         
@@ -317,9 +317,32 @@ def periodic_check_pending_transactions():
                     r.delete(key)
                     continue
 
+                # просрочка ожидания
+                if first_seen_str:
+                    first_seen = datetime.fromisoformat(first_seen_str)
+                    if datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
+                        msg = {     
+                            "msg_status": "expired",           
+                            "lang": lang,
+                            "amount_result": amount,
+                            "target_address": target_address,
+                            "timestamp": result.get("timestamp", "N/A"),
+                        }
+                        error_msg = f"Транзакция удалена: не получено подтверждение в течение 2 часов\n{result.get('error','')}"
+                        google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
+                        run_async_coroutine(send_telegram_notification(chat_id, msg))
+                        update_transaction_status(tx_hash, google_update_params)
+
+                        r.delete(key)
+                        continue
+
+                # если просто pending — оставляем ключ с продлённым TTL
+                _touch_ttl(key)
+
             except Exception as e:
-                logger.error(f"Ошибка в periodic_check_pending_transactions для {tx_hash}: {e}")
-                continue
+                logger.error(f"[BEAT] Ошибка при проверке {tx_hash}: {e}")
+                _update_error(key, "internal_error", str(e))
+                _touch_ttl(key)
 
     except Exception as e:
-        logger.error(f"Критическая ошибка в periodic_check_pending_transactions: {e}") 
+        logger.error(f"[BEAT] Ошибка в periodic_check_pending_transactions: {e}")
