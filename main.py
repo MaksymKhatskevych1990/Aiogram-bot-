@@ -16,6 +16,20 @@ from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
 
+
+import aiohttp
+import logging
+import traceback
+
+# Патч для отслеживания всех ClientSession
+_old_init = aiohttp.ClientSession.__init__
+
+def _new_init(self, *args, **kwargs):
+    _old_init(self, *args, **kwargs)
+    logging.error(f"[TRACK] Created ClientSession {hex(id(self))}\n" +
+                  "".join(traceback.format_stack(limit=10)))
+
+aiohttp.ClientSession.__init__ = _new_init
 # Use in-memory storage instead of Redis
 # storage = MemoryStorage()
 redis_fsm = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
