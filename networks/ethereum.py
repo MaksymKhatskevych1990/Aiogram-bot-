@@ -59,11 +59,13 @@ async def _client_session():
     
     timeout = aiohttp.ClientTimeout(total=10)
     session = aiohttp.ClientSession(timeout=timeout)
+    session_id = hex(id(session))
+    logger.info(f"[ethereum] +++++Created ClientSession {session_id}")
     try:
         yield session
     finally:
         await session.close()
-        logger.info("[ethereum] ClientSession closed")
+        logger.info(f"[ethereum] Closed------ ClientSession {session_id}")
 
 async def _get(session, params, retries=3):
     last_err = None
@@ -80,7 +82,7 @@ async def _get(session, params, retries=3):
                     continue
                 
                 data = await resp.json()
-            await asyncio.sleep(1)  # Etherscan rate limit
+            # await asyncio.sleep(1)  # Etherscan rate limit
             logger.info(f"[ethereum] ---_get----------------------------------------: {resp.status}")
             return data
         except Exception as e:
