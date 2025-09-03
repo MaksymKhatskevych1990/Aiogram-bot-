@@ -41,11 +41,13 @@ async def _client_session():
     
     timeout = aiohttp.ClientTimeout(total=10)
     session = aiohttp.ClientSession(timeout=timeout)
+    session_id = hex(id(session))
+    logger.info(f"[tron] +++++Created ClientSession {session_id}")
     try:
         yield session
     finally:
+        logger.info(f"[tron] Closed------ ClientSession {session_id}")
         await session.close()
-        logger.info("[ethereum] ClientSession closed")
 
 
 async def _get(session, url: str, params: dict, retries: int = 3) -> dict:
