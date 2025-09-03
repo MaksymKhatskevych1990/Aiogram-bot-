@@ -32,7 +32,7 @@ from networks.tron import check_tron_transaction
 from handlers.crypto import send_telegram_notification
 from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
-
+import utils.aiohttp_debug
 # --- Настройки ---
 
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
@@ -139,8 +139,10 @@ async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_stat
     except Exception as e:
         logger.error(f"Ошибка в _advance_fsm_state: {e}")
 
+from utils.aiohttp_debug import print_active_sessions
 @celery_task_fallback
 def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang, network):
+    print_active_sessions("before task")
     if not r:
         logger.error("Redis недоступен для check_erc20_confirmation_task")
         return
@@ -199,6 +201,7 @@ def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, 
                 },
             ))
             run_async_coroutine(send_telegram_notification(chat_id, msg))
+            print_active_sessions("after task")
             return
         else:
             if not r.exists(key):
@@ -241,6 +244,7 @@ def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, 
 
 @celery_task_fallback
 def periodic_check_pending_transactions():
+    print_active_sessions("before task------------------------------------------------------------------------------------------------------------------------------------")
     if not r:
         logger.error("Redis недоступен для periodic_check_pending_transactions")
         return
@@ -321,6 +325,7 @@ def periodic_check_pending_transactions():
                             },
                         ))
                         r.delete(key)
+                        print_active_sessions("after task ----------------------------------------------------------------------------------------")
                         continue
 
                     # обновим стадии/ошибку
