@@ -37,10 +37,12 @@ async def get_usd_uah_rates(wholesale: bool = False) -> Tuple[Optional[float], O
     # Fallback на CSV (только retail)
     return await _get_usd_from_csv()
 
-
+from config import ETHERSCAN_API_KEY, ERC20_CONFIRMATIONS, logger
 async def _get_usd_from_csv() -> Tuple[float, float]:
     try:
         async with aiohttp.ClientSession() as session:
+            session_id = hex(id(session))
+            logger.info(f"[fiat_rates] ===================================Created ClientSession {session_id}")
             async with session.get(CSV_URL) as resp:
                 if resp.status != 200:
                     print(f"CSV недоступен, статус {resp.status}")
