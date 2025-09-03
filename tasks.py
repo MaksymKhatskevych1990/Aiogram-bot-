@@ -1,4 +1,3 @@
-import json
 import asyncio
 import concurrent.futures
 from threading import Thread
@@ -10,7 +9,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from handlers.crypto import CryptoFSM
 import redis
 from redis.asyncio import Redis as AsyncRedis
-from config import REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX_ERC, REDIS_URL
+from config import REDIS_DB_FSM, REDIS_DB, REDIS_KEY_PREFIX_ERC, REDIS_KEY_PREFIX_TRC, REDIS_URL
 # Conditional import for Celery
 try:
     from celery_app import celery_app
@@ -29,6 +28,7 @@ def celery_task_fallback(func):
         return func
 
 from networks.ethereum import check_transaction_stages
+from networks.tron import check_tron_transaction
 from handlers.crypto import send_telegram_notification
 from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
@@ -39,6 +39,15 @@ PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
 MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
 
 r = redis.Redis.from_url(REDIS_URL, db=REDIS_DB, decode_responses=True)
+
+# --- Async Redis Singleton ---
+r_async: AsyncRedis | None = None
+
+def get_async_redis() -> AsyncRedis:
+    global r_async
+    if r_async is None:
+        r_async = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
+    return r_async
 
 # async loop infra
 _loop = None
@@ -69,7 +78,7 @@ def _touch_ttl(key: str):
     if r:
         r.expire(key, PENDING_TTL)
 
-def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount):
+def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount, network):
     if not r:
         logger.error("Redis недоступен")
         return
@@ -86,7 +95,8 @@ def _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amo
         "stage": "in_block,is_erc20,recipient,transfer_params,confirmations",
         "last_error_code": "",
         "last_error_text": "",
-        "amount": amount
+        "amount": amount,
+        "network": network
     })
     _touch_ttl(key)
 
@@ -130,7 +140,7 @@ async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_stat
         logger.error(f"Ошибка в _advance_fsm_state: {e}")
 
 @celery_task_fallback
-def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang):
+def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang, network):
     if not r:
         logger.error("Redis недоступен для check_erc20_confirmation_task")
         return
@@ -139,10 +149,14 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
     kyiv_tz = ZoneInfo("Europe/Kyiv")
     now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")
 
-    stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}
+
 
     try:
-        result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+        if network == "ERC20":
+            stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}          
+            result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+        if network == "TRC20":
+            result = run_async_coroutine(check_tron_transaction(tx_hash, target_address))
         code = result.get("code", "") != "low_confirmations"
         amount = result.get("amount", "N/A")
 
@@ -188,12 +202,13 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
             return
         else:
             if not r.exists(key):
-                _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount)
+                _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount, network)
 
         # not success → обновим стадии/ошибку и оставим ключ
-        stage_left = result.get("stage", [])
-        _update_stage(key, stage_left)
-        _update_error(key, result.get("code", ""), result.get("error", ""))
+        if network == "ERC20":
+            stage_left = result.get("stage", [])
+            _update_stage(key, stage_left)
+            _update_error(key, result.get("code", ""), result.get("error", ""))
 
         # для «фатальных» кейсов сразу уведомим
         code = result.get("code")
@@ -225,7 +240,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
             _update_error(key, "internal_error", str(e))
 
 @celery_task_fallback
-def periodic_check_pending_transactions_erc20():
+def periodic_check_pending_transactions():
     if not r:
         logger.error("Redis недоступен для periodic_check_pending_transactions")
         return
@@ -237,112 +252,135 @@ def periodic_check_pending_transactions_erc20():
     Периодический обход всех pending транзакций.
     """
     try:
-        keys = r.keys(f"{REDIS_KEY_PREFIX_ERC}*")
-        for key in keys:
-            tx_data = r.hgetall(key)
-            if not tx_data:
-                continue
+        # keys = r.keys(f"{REDIS_KEY_PREFIX_ERC}*")
+        patterns = [f"{REDIS_KEY_PREFIX_ERC}*", f"{REDIS_KEY_PREFIX_TRC}*"]
 
-            tx_hash = key.split(":")[1]
-            username = tx_data.get("username")
-            lang = tx_data.get("lang")
-            chat_id = tx_data.get("chat_id")
-            bot_id = tx_data.get("bot_id")
-            target_address = tx_data.get("target_address")
-            first_seen_str = tx_data.get("first_seen")
-            stage_list = _parse_stage_list(tx_data.get("stage"))
-            amount = tx_data.get("amount", "N/A")
+        for pattern in patterns:
+            for key in r.scan_iter(match=pattern):
+                tx_data = r.hgetall(key)
+                if not tx_data:
+                    continue
 
-            if not username or not target_address:
-                logger.warning(f"[BEAT] Пропускаю {key} — нет username/target_address")
-                r.delete(key)
-                continue
+                tx_hash = key.split(":")[1]
+                username = tx_data.get("username")
+                lang = tx_data.get("lang")
+                chat_id = tx_data.get("chat_id")
+                bot_id = tx_data.get("bot_id")
+                target_address = tx_data.get("target_address")
+                first_seen_str = tx_data.get("first_seen")
+                amount = tx_data.get("amount", "N/A")
+                network = tx_data.get("network", "N/A")
 
-            stage_set = set(stage_list) if stage_list else {"in_block","is_erc20","recipient","transfer_params","confirmations"}
-
-            try:
-                result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
-                logger.info(f"[BEAT] {tx_hash} result: {result}")
-
-                if result.get("success") and result.get("status") == "confirmed":
-                    google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5]}
-                    msg = {
-                        "msg_status": "tx_confirmed",
-                        "lang": lang,
-                        "amount_result": amount,
-                        "target_address": target_address,
-                        "timestamp": result.get("timestamp", "N/A"),
-                    }
-                    run_async_coroutine(send_telegram_notification(chat_id, msg))
-                    update_transaction_status(tx_hash, google_update_params)
-                    run_async_coroutine(_advance_fsm_state(
-                        username=username,
-                        chat_id=chat_id,
-                        bot_id=bot_id,
-                        next_state=CryptoFSM.contact,
-                        extra={
-                            "amount_result": amount,
-                            "tx_hash": tx_hash,
-                            "target_address": target_address,
-                            "timestamp": result.get("timestamp", "N/A"),
-                        },
-                    ))
+                if not username or not target_address:
+                    logger.warning(f"[BEAT] Пропускаю {key} — нет username/target_address")
                     r.delete(key)
                     continue
 
-                # обновим стадии/ошибку
-                _update_stage(key, result.get("stage", []))
-                _update_error(key, result.get("code",""), result.get("error",""))
+                
 
-                code = result.get("code")
+                try:
+                    if network == "ERC20":
+                        stage_list = _parse_stage_list(tx_data.get("stage"))
+                        stage_set = set(stage_list) if stage_list else {"in_block","is_erc20","recipient","transfer_params","confirmations"}
+                        result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+                    if network == "TRC20":
+                        result = run_async_coroutine(check_tron_transaction(tx_hash, target_address))
+                    # result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+                    logger.info(f"[BEAT] {tx_hash} result: {result}")
 
-                # фатальные кейсы — сразу уведомление и чистим
-                if code in ("invalid_token", "invalid_recipient"):
-                    google_update_params = {"status": result.get("status")}
-                    msg = {                
-                        "lang": lang,
-                        "amount_result": amount,
-                        "target_address": target_address,
-                        "timestamp": result.get("timestamp", "N/A"),
-                    }
-                    if code == "invalid_token":
-                        msg.update({"msg_status": "invalid_token_erc"})
-                    else:
-                        msg.update({"msg_status": "invalid_recipient"})
-                        
-                    google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
-                    run_async_coroutine(send_telegram_notification(chat_id, msg))
-                    update_transaction_status(tx_hash, google_update_params)
-
-                    r.delete(key)
-                    continue
-
-                # просрочка ожидания
-                if first_seen_str:
-                    first_seen = datetime.fromisoformat(first_seen_str)
-                    if datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
-                        msg = {     
-                            "msg_status": "expired",           
+                    if result.get("success") and result.get("status") == "confirmed":
+                        if network == "ERC20":
+                            google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5]}
+                        if network == "TRC20":
+                            google_update_params = {
+                                "status": [result.get("status"), 6], 
+                                "date_confirmation": [now, 5], 
+                                "timestamp": [result.get("timestamp", "N/A"), 4],
+                                "amount": [result.get("amount", "N/A"), 7],
+                                "error": ['', 8]
+                            }
+                        msg = {
+                            "msg_status": "tx_confirmed",
                             "lang": lang,
                             "amount_result": amount,
                             "target_address": target_address,
                             "timestamp": result.get("timestamp", "N/A"),
                         }
-                        error_msg = f"Транзакция удалена: не получено подтверждение в течение 2 часов\n{result.get('error','')}"
-                        google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
+                        run_async_coroutine(send_telegram_notification(chat_id, msg))
+                        update_transaction_status(tx_hash, google_update_params)
+                        run_async_coroutine(_advance_fsm_state(
+                            username=username,
+                            chat_id=chat_id,
+                            bot_id=bot_id,
+                            next_state=CryptoFSM.contact,
+                            extra={
+                                "amount_result": amount,
+                                "tx_hash": tx_hash,
+                                "target_address": target_address,
+                                "timestamp": result.get("timestamp", "N/A"),
+                            },
+                        ))
+                        r.delete(key)
+                        continue
+
+                    # обновим стадии/ошибку
+                    if network == "ERC20":
+                        _update_stage(key, result.get("stage", []))
+                        _update_error(key, result.get("code",""), result.get("error",""))
+
+                    code = result.get("code")
+
+                    # фатальные кейсы — сразу уведомление и чистим
+                    if code in ("invalid_token", "invalid_recipient"):
+                        google_update_params = {"status": result.get("status")}
+                        msg = {                
+                            "lang": lang,
+                            "amount_result": amount,
+                            "target_address": target_address,
+                            "timestamp": result.get("timestamp", "N/A"),
+                        }
+                        if code == "invalid_token":
+                            if network == "ERC20":
+                                msg.update({"msg_status": "invalid_token_erc"})
+                            if network == "TRC20":
+                                msg.update({"msg_status": "invalid_token_trc"})
+                            
+                        else:
+                            msg.update({"msg_status": "invalid_recipient"})
+                            
+                        google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
                         run_async_coroutine(send_telegram_notification(chat_id, msg))
                         update_transaction_status(tx_hash, google_update_params)
 
                         r.delete(key)
                         continue
 
-                # если просто pending — оставляем ключ с продлённым TTL
-                _touch_ttl(key)
+                    # просрочка ожидания
+                    if first_seen_str:
+                        first_seen = datetime.fromisoformat(first_seen_str)
+                        if datetime.now(timezone.utc) - first_seen > MAX_PENDING_DURATION:
+                            msg = {     
+                                "msg_status": "expired",           
+                                "lang": lang,
+                                "amount_result": amount,
+                                "target_address": target_address,
+                                "timestamp": result.get("timestamp", "N/A"),
+                            }
+                            error_msg = f"Транзакция удалена: не получено подтверждение в течение 2 часов\n{result.get('error','')}"
+                            google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
+                            run_async_coroutine(send_telegram_notification(chat_id, msg))
+                            update_transaction_status(tx_hash, google_update_params)
 
-            except Exception as e:
-                logger.error(f"[BEAT] Ошибка при проверке {tx_hash}: {e}")
-                _update_error(key, "internal_error", str(e))
-                _touch_ttl(key)
+                            r.delete(key)
+                            continue
+
+                    # если просто pending — оставляем ключ с продлённым TTL
+                    _touch_ttl(key)
+
+                except Exception as e:
+                    logger.error(f"[BEAT] Ошибка при проверке {tx_hash}: {e}")
+                    _update_error(key, "internal_error", str(e))
+                    _touch_ttl(key)
 
     except Exception as e:
         logger.error(f"[BEAT] Ошибка в periodic_check_pending_transactions: {e}")
