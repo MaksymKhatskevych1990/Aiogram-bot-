@@ -39,12 +39,12 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)
 google = GOOGLE_API_KEY
 
-# Инициализируем парсер курсов из канала
-channel_rates_parser = ChannelRatesParser(bot, "@obmenvalut13")
+# # Инициализируем парсер курсов из канала
+# channel_rates_parser = ChannelRatesParser(bot, "@obmenvalut13")
 
-# Делаем парсер доступным глобально
-import utils.channel_rates
-utils.channel_rates.channel_rates_parser = channel_rates_parser
+# # Делаем парсер доступным глобально
+# import utils.channel_rates
+# utils.channel_rates.channel_rates_parser = channel_rates_parser
 
 
 
