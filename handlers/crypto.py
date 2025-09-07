@@ -3,7 +3,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-
+import asyncio
+from aiogram import Bot
 
 
 
@@ -15,8 +16,13 @@ from utils.generate_qr_code import generate_wallet_qr
 from utils.commission_calculator import commission_calculator
 from localization import get_message
 
-from config import logger
+from config import logger, TOKEN
 
+bot = Bot(token=TOKEN)
+
+async def get_bot_id() -> int:
+    me = await bot.get_me()
+    return me.id
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
 class CryptoFSM(StatesGroup):
@@ -292,8 +298,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     
     user_id = message.from_user.id
     chat_id = message.chat.id  
-    me = await message.bot.get_me()
-    bot_id = me.id 
+    bot_id = await get_bot_id()   
 
     user_input = message.text.strip()
     tx_hash = extract_tx_hash(user_input) #Проверка хэша на валидность
@@ -320,36 +325,36 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     )
     
     # # Обрабатываем результат верификации
-    if verification_result.get("success"):
-        await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
-        await message.answer(
-            get_message(
-                "tx_confirmed", lang,
-                amount=verification_result.get('amount', 'N/A'),
-                from_addr=verification_result.get('from', 'N/A')[:10] + '...',
-                timestamp=verification_result.get('timestamp', 'N/A')
-            ),
-            reply_markup=get_back_keyboard(lang)
-        )
-        save_transaction_hash(
-            message.from_user.username or str(message.from_user.id),
-            tx_hash,
-            wallet_address,
-            "PENDING"
-        )
-        await state.set_state(CryptoFSM.contact)
-    else:
-        error_msg = verification_result.get("error", "Неизвестная ошибка")
-        await message.answer(
-            get_message("tx_not_confirmed", lang, error=error_msg),
-            reply_markup=get_back_keyboard(lang)
-        )
-        await state.set_state(CryptoFSM.transaction_hash)
+    # if verification_result.get("success"):
+    #     await state.update_data(amount_result=verification_result.get('amount', 'N/A'))
+    #     await message.answer(
+    #         get_message(
+    #             "tx_confirmed", lang,
+    #             amount=verification_result.get('amount', 'N/A'),
+    #             from_addr=verification_result.get('from', 'N/A')[:10] + '...',
+    #             timestamp=verification_result.get('timestamp', 'N/A')
+    #         ),
+    #         reply_markup=get_back_keyboard(lang)
+    #     )
+    #     save_transaction_hash(
+    #         message.from_user.username or str(message.from_user.id),
+    #         tx_hash,
+    #         wallet_address,
+    #         "PENDING"
+    #     )
+    #     await state.set_state(CryptoFSM.contact)
+    # else:
+    #     error_msg = verification_result.get("error", "Неизвестная ошибка")
+    #     await message.answer(
+    #         get_message("tx_not_confirmed", lang, error=error_msg),
+    #         reply_markup=get_back_keyboard(lang)
+    #     )
+    #     await state.set_state(CryptoFSM.transaction_hash)
 
 async def send_telegram_notification(chat_id: str, msg):
     from aiogram import Bot
     from config import logger, TOKEN
-
+    
     bot = Bot(token=TOKEN)
     """
     Отправляет уведомление в Telegram пользователю о подтвержденной транзакции
@@ -449,26 +454,26 @@ async def get_contact(message: types.Message, state: FSMContext):
         )
         print(f"Отправляю сообщение администратору в чат: {ADMIN_CHAT_ID}")
         # Сохраняем заявку в Google Sheets ДО очистки state!
-        row_data = {
-            'currency': 'USDT',  # по умолчанию
-            'amount': data.get('amount_result', data.get('amount', '')),
-            'network': data.get('network', ''),
-            'wallet_address': data.get('wallet_address', ''),
-            'visit_time': '',  # если нет - оставляем пустым
-            'client_name': '', # если нет - оставляем пустым
-            'phone': data.get('contact', ''),
-            'telegram': message.from_user.username or ''
-        }
+        # row_data = {
+        #     'currency': 'USDT',  # по умолчанию
+        #     'amount': data.get('amount_result', data.get('amount', '')),
+        #     'network': data.get('network', ''),
+        #     'wallet_address': data.get('wallet_address', ''),
+        #     'visit_time': '',  # если нет - оставляем пустым
+        #     'client_name': '', # если нет - оставляем пустым
+        #     'phone': data.get('contact', ''),
+        #     'telegram': message.from_user.username or ''
+        # }
 
         # Пытаемся записать в таблицу
-        success = save_crypto_request_to_sheet(row_data)
+        # success = save_crypto_request_to_sheet(row_data)
         change_param = f"{str(data.get('contact', ''))}/{message.from_user.username or ''}"
         google_update_params = {
             "contact": [change_param, 9]
         }
         success = update_transaction_status(data['transaction_hash'], google_update_params)
-        if not success:
-            await message.answer(get_message("google_sheet_error", lang))
+        # if not success:
+        #     await message.answer(get_message("google_sheet_error", lang))
 
         await state.clear()
 
