@@ -45,8 +45,7 @@ TRONSCAN_API = "https://api.tronscan.org/api"
 ETHERSCAN_API = "https://api.etherscan.io/api"
 
 # Настройки количества подтверждений
-TRC20_CONFIRMATIONS = 1
-ERC20_CONFIRMATIONS = 6
+from config import TRC20_CONFIRMATIONS, ERC20_CONFIRMATIONS
 
 def get_wallet_address(network: str) -> str:
     """
@@ -238,11 +237,11 @@ def save_cash_exchange_request_to_sheet(data: dict) -> bool:
         # Формируем строку для записи
         row = [
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # Дата и время
+            data.get('request_number', ''),  # Номер заявки
             data.get('operation', ''),  # Операция (Купить/Продать USD)
             data.get('amount', ''),  # Сумма USD
             data.get('city', ''),  # Город
             data.get('branch', ''),  # Отделение
-            data.get('time', ''),  # Время визита
             data.get('name', ''),  # Имя клиента
             data.get('phone', ''),  # Телефон
             data.get('telegram', ''),  # Telegram username

@@ -2,7 +2,9 @@
 import json
 import aiohttp
 import datetime
-from typing import Dict, Any, Optional
+import json
+import re
+from typing import Optional, Dict, Any
 
 from config import TRONSCAN_API, TRC20_CONFIRMATIONS, logger
 from utils.extract_hash_in_url import extract_tx_hash
@@ -123,6 +125,7 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
     """
     Проверяет TRC20 USDT транзакцию в сети Tron.
     """
+    logger.info("Starting TRON transaction check. Input: %s, Target: %s", user_input, target_address)
     tx_hash: Optional[str] = extract_tx_hash(user_input)
     if not tx_hash:
         return _failed(TxCode.NOT_FOUND, error="Введите корректный хеш")

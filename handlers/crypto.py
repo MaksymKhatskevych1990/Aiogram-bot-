@@ -487,4 +487,3 @@ def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(get_client_wallet, StateFilter(CryptoFSM.client_wallet))
     dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
     dp.message.register(get_contact, StateFilter(CryptoFSM.contact))
-

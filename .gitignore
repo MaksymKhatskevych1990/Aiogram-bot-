@@ -21,10 +21,11 @@ dump.rdb
 nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
 nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
 promt.txt
-rates_session.session
 nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC
 test_commission.py
 service_account.json
 start_bot.bat
 /docker-compose.yml
 /Dockerfile
+request_counter.txt
+.env
