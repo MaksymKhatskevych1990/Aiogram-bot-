@@ -1,7 +1,10 @@
 # networks/ethereum.py
+import json
 import aiohttp
 import asyncio
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+
 from config import ETHERSCAN_API_KEY, ERC20_CONFIRMATIONS, logger
 from utils.decode_etc20 import decode_erc20_input
 
@@ -50,9 +53,19 @@ def _failed(code, stage_left, **extra):
 def _expired(stage_left, **extra):
     return {"success": False, "status": "expired", "code": "expired", "stage": stage_left, **extra}
 
-def _client_session():
+
+@asynccontextmanager
+async def _client_session():
+    
     timeout = aiohttp.ClientTimeout(total=10)
-    return aiohttp.ClientSession(timeout=timeout)
+    session = aiohttp.ClientSession(timeout=timeout)
+    session_id = hex(id(session))
+    logger.info(f"[ethereum] +++++Created ClientSession {session_id}")
+    try:
+        yield session
+    finally:
+        await session.close()
+        logger.info(f"[ethereum] Closed------ ClientSession {session_id}")
 
 async def _get(session, params, retries=3):
     last_err = None
@@ -69,9 +82,9 @@ async def _get(session, params, retries=3):
                     continue
                 
                 data = await resp.json()
-                await asyncio.sleep(1)  # Etherscan rate limit
-                logger.info(f"[ethereum] ---_get----------------------------------------: {resp.status}")
-                return data
+            await asyncio.sleep(1)  # Etherscan rate limit
+            logger.info(f"[ethereum] ---_get----------------------------------------: {resp.status}")
+            return data
         except Exception as e:
             last_err = e
             logger.error(f"[ethereum] Request failed (attempt {i+1}/{retries}): {str(e)}")
