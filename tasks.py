@@ -128,6 +128,14 @@ async def _advance_fsm_state(username: int, chat_id: int, bot_id: int, next_stat
         logger.info(f"[tasks] _advance_fsm_state params: {chat_id} ----- {username} ----- {bot_id}")
         key = StorageKey(bot_id=bot_id, chat_id=chat_id, user_id=username)
         logger.info(f"[tasks] _advance_fsm_state key: {key}")
+
+        if next_state is None:
+            # очищаем FSM
+            await storage.set_state(key, None)
+            await storage.set_data(key, {})
+            logger.info(f"[tasks] FSM состояние очищено для key: {key}")
+            return
+
         await storage.set_state(key, next_state)
         current_state = await storage.get_state(key)
         logger.info(f"[tasks] _advance_fsm_state current_state after set: {current_state}")
@@ -153,11 +161,9 @@ def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, 
 
     try:
         if network == "ERC20":
-            stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}
-            logger.info(f"[tasks---check_confirmation_task] ERC20:-------------------------------------------------------------------")          
+            stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}          
             result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
         if network == "TRC20":
-            logger.info(f"[tasks---check_confirmation_task] TRC20:+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")    
             result = run_async_coroutine(check_tron_transaction(tx_hash, target_address))
         code = result.get("code", "") != "low_confirmations"
         amount = result.get("amount", "N/A")
@@ -230,6 +236,7 @@ def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, 
             google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
             run_async_coroutine(send_telegram_notification(chat_id, msg))
             update_transaction_status(tx_hash, google_update_params)
+            run_async_coroutine(_advance_fsm_state(username, chat_id, bot_id, None))
             
             r.delete(key)
         else:
@@ -284,10 +291,8 @@ def periodic_check_pending_transactions():
                     if network == "ERC20":
                         stage_list = _parse_stage_list(tx_data.get("stage"))
                         stage_set = set(stage_list) if stage_list else {"in_block","is_erc20","recipient","transfer_params","confirmations"}
-                        logger.info(f"[tasks---periodic_check_pending_transactions] ERC20:-------------------------------------------------------------------")   
                         result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
                     if network == "TRC20":
-                        logger.info(f"[tasks---periodic_check_pending_transactions] TRC20:+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++") 
                         result = run_async_coroutine(check_tron_transaction(tx_hash, target_address))
                     # result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
                     logger.info(f"[BEAT] {tx_hash} result: {result}")
@@ -355,6 +360,7 @@ def periodic_check_pending_transactions():
                         google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
                         run_async_coroutine(send_telegram_notification(chat_id, msg))
                         update_transaction_status(tx_hash, google_update_params)
+                        run_async_coroutine(_advance_fsm_state(username, chat_id, bot_id, None))
 
                         r.delete(key)
                         continue
@@ -374,6 +380,7 @@ def periodic_check_pending_transactions():
                             google_update_params = {"status": ["expired", 6], "date_confirmation": [now, 5], "error": [error_msg, 8]}
                             run_async_coroutine(send_telegram_notification(chat_id, msg))
                             update_transaction_status(tx_hash, google_update_params)
+                            run_async_coroutine(_advance_fsm_state(username, chat_id, bot_id, None))
 
                             r.delete(key)
                             continue

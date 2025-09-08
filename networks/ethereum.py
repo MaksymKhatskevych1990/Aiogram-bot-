@@ -82,7 +82,7 @@ async def _get(session, params, retries=3):
                     continue
                 
                 data = await resp.json()
-            # await asyncio.sleep(1)  # Etherscan rate limit
+            await asyncio.sleep(1)  # Etherscan rate limit
             logger.info(f"[ethereum] ---_get----------------------------------------: {resp.status}")
             return data
         except Exception as e:

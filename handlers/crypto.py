@@ -7,7 +7,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 
-from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, update_transaction_status
+from google_utils import get_wallet_address, is_duplicate_transaction, verify_transaction, update_transaction_status
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
 from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard
@@ -300,6 +300,11 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     if not tx_hash:
         await message.answer(get_message("invalid_tx_hash", lang))
         return
+    
+    if is_duplicate_transaction(tx_hash):
+            await message.answer(get_message("is_duplicate_transaction", lang))
+            return
+
     await state.update_data(transaction_hash=tx_hash)
     await message.answer(get_message("checking_tx", lang))
     data = await state.get_data()
