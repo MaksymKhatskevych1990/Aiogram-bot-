@@ -76,20 +76,39 @@ def get_wallet_address(network: str) -> str:
         return None
 
 async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
-    from tasks import check_erc20_confirmation_task
+    from tasks import check_confirmation_task
+
     """
     Проверяет транзакцию в зависимости от сети
     """
-    if network == "TRC20":
-        return await check_tron_transaction(tx_hash, target_address)
-    elif network == "ERC20":
-        check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
-    else:
-        return {
-            "success": False,
-            "error": f"Неподдерживаемая сеть: {network}"
-        }
+    check_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang, network)
+    # if network == "TRC20" or network == "ERC20":
+    #     check_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang, network)
+    # else:
+    #     return {
+    #         "success": False,
+    #         "error": f"Неподдерживаемая сеть: {network}"
+    #     }
 
+
+def is_duplicate_transaction(tx_hash: str) -> bool:
+
+    try:
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
+
+        all_hashes = sheet.col_values(2)  
+        return tx_hash in all_hashes
+
+    except Exception as e:
+        print(f"❌ Ошибка при проверке дубликата: {e}")
+        return False
 
 def save_transaction_hash(google_params) -> bool:
     try:

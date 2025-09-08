@@ -3,12 +3,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-import asyncio
-from aiogram import Bot
 
 
 
-from google_utils import get_wallet_address, save_transaction_hash, verify_transaction, update_transaction_status
+
+from google_utils import get_wallet_address, is_duplicate_transaction, verify_transaction, update_transaction_status
 from utils.validators import is_valid_tx_hash
 from utils.extract_hash_in_url import extract_tx_hash
 from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard
@@ -16,13 +15,8 @@ from utils.generate_qr_code import generate_wallet_qr
 from utils.commission_calculator import commission_calculator
 from localization import get_message
 
-from config import logger, TOKEN
+from config import logger
 
-bot = Bot(token=TOKEN)
-
-async def get_bot_id() -> int:
-    me = await bot.get_me()
-    return me.id
 WALLET_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo/export?format=csv&gid=2135417046"
 # Состояния FSM
 class CryptoFSM(StatesGroup):
@@ -298,13 +292,19 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
     
     user_id = message.from_user.id
     chat_id = message.chat.id  
-    bot_id = await get_bot_id()   
+    me = await message.bot.get_me()
+    bot_id = me.id 
 
     user_input = message.text.strip()
     tx_hash = extract_tx_hash(user_input) #Проверка хэша на валидность
     if not tx_hash:
         await message.answer(get_message("invalid_tx_hash", lang))
         return
+    
+    if is_duplicate_transaction(tx_hash):
+            await message.answer(get_message("is_duplicate_transaction", lang))
+            return
+
     await state.update_data(transaction_hash=tx_hash)
     await message.answer(get_message("checking_tx", lang))
     data = await state.get_data()
@@ -354,7 +354,7 @@ async def get_transaction_hash(message: types.Message, state: FSMContext):
 async def send_telegram_notification(chat_id: str, msg):
     from aiogram import Bot
     from config import logger, TOKEN
-    
+
     bot = Bot(token=TOKEN)
     """
     Отправляет уведомление в Telegram пользователю о подтвержденной транзакции

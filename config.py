@@ -36,6 +36,10 @@ ERC20_CONFIRMATIONS = int(os.getenv('ERC20_CONFIRMATIONS', '12'))
 
 # Redis Configuration для Railway
 REDIS_URL = os.getenv('REDIS_URL')
+REDIS_DB_FSM = os.getenv('REDIS_DB_FSM')
+REDIS_BACKEND_DB = os.getenv('REDIS_BACKEND_DB')
+REDIS_KEY_PREFIX_ERC = os.getenv('REDIS_KEY_PREFIX_ERC')
+REDIS_KEY_PREFIX_TRC = os.getenv('REDIS_KEY_PREFIX_TRC')
 
 # Парсим Redis URL для совместимости с существующим кодом
 if REDIS_URL:
@@ -78,7 +82,6 @@ else:
     REDISPORT = int(os.getenv('REDISPORT', 6379))
     REDISPASSWORD = os.getenv('REDISPASSWORD')
 
-REDIS_DB_FSM = int(os.getenv('REDIS_DB_FSM', 0))
 REDIS_DB = int(os.getenv('REDIS_DB', 1))
 REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'bot')
 
