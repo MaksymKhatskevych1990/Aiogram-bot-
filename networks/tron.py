@@ -44,7 +44,7 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
                         logger.error("Ошибка парсинга JSON TronScan: %s", e2)
                         return {"success": False, "error": "Некорректный ответ от TronScan API"}
 
-                logger.info("TRON raw data: %s", data)
+                # logger.info("TRON raw data: %s", data)
 
                 if data.get("confirmed") is not True:
                     logger.info("Transaction not confirmed")

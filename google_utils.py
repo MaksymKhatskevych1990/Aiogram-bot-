@@ -76,19 +76,19 @@ def get_wallet_address(network: str) -> str:
         return None
 
 async def verify_transaction(tx_hash: str, network: str, target_address: str, username: int, chat_id: int, bot_id: int, lang) -> Dict[str, Any]:
-    from tasks import check_erc20_confirmation_task
+    from tasks import check_confirmation_task
     """
-    Проверяет транзакцию в зависимости от сети
+    Проверяет транзакцию в зависимости от сети через асинхронную задачу
     """
-    if network == "TRC20":
-        return await check_tron_transaction(tx_hash, target_address)
-    elif network == "ERC20":
-        check_erc20_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang)
-    else:
-        return {
-            "success": False,
-            "error": f"Неподдерживаемая сеть: {network}"
-        }
+    # Запускаем универсальную задачу проверки транзакции
+    check_confirmation_task.delay(tx_hash, target_address, username, chat_id, bot_id, lang, network)
+    
+    # Возвращаем статус "обрабатывается" для всех сетей
+    return {
+        "success": True,
+        "status": "processing",
+        "message": "Транзакция проверяется..."
+    }
 
 
 def save_transaction_hash(google_params) -> bool:
@@ -100,7 +100,7 @@ def save_transaction_hash(google_params) -> bool:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
 
-        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
 
 
         sheet.append_row(google_params, value_input_option='USER_ENTERED')
@@ -151,11 +151,27 @@ def update_transaction_status(transaction_hash: str, google_update_params) -> bo
         creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
 
-        # Открываем нужный лист
-        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Лист4')
+        # Открываем нужный лист (TRC транзакции)
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
 
-        # Ищем ячейку с transaction_hash
-        cell = sheet.find(transaction_hash)
+        # Ищем ячейку с transaction_hash или первую пустую ячейку в колонке F
+        if transaction_hash and transaction_hash.strip():
+            cell = sheet.find(transaction_hash)
+        else:
+            # Если transaction_hash пустой, ищем первую строку с пустым хешем в колонке F
+            records = sheet.get_all_records()
+            cell = None
+            for i, record in enumerate(records, start=2):  # начинаем с 2-й строки (после заголовков)
+                tx_hash = record.get('Хеш транзакции', '')
+                tx_hash_str = str(tx_hash).strip() if tx_hash is not None else ''
+                if not tx_hash_str:  # Если ячейка пустая
+                    # Создаем объект cell для пустой ячейки
+                    class MockCell:
+                        def __init__(self, row, col):
+                            self.row = row
+                            self.col = col
+                    cell = MockCell(i, 6)  # Колонка F (6)
+                    break
 
         if cell:
             # Допустим, колонка статуса — это 5-я колонка (как в твоей функции)
@@ -235,4 +251,169 @@ def save_cash_exchange_request_to_sheet(data: dict) -> bool:
         
     except Exception as e:
         print(f"❌ Ошибка при сохранении заявки на обмен наличных: {e}")
+        return False
+
+def save_transaction_tracking_to_sheet(transaction_data: dict):
+    """Сохраняет данные отслеживания транзакции в Google Sheets"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем таблицу для отслеживания транзакций
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций')
+        
+        # Добавляем строку с данными
+        row_data = [
+            transaction_data.get('amount', ''),
+            transaction_data.get('initiator_user_id', ''),
+            transaction_data.get('tx_hash_user_id', ''),
+            transaction_data.get('network', ''),
+            transaction_data.get('operation', ''),
+            transaction_data.get('tx_hash', ''),
+            transaction_data.get('started_at', ''),
+            transaction_data.get('status', ''),
+            datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+        ]
+        
+        sheet.append_row(row_data)
+        print(f"✅ Данные отслеживания сохранены в Google Sheets")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении данных отслеживания: {e}")
+        return False
+
+def save_trc_transaction_tracking_to_sheet(transaction_data: dict):
+    """Сохраняет данные отслеживания TRC транзакции в Google Sheets с PIN-кодом и номером телефона"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем таблицу для отслеживания TRC транзакций
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
+        
+        # Добавляем строку с данными согласно структуре таблицы из скриншота:
+        # A: Сумма USDT, B: ID инициатора, C: ID введшего хеш, D: Сеть, E: Операция, 
+        # F: Хеш транзакции, G: Время начала, H: Статус, I: Время записи, 
+        # J: ID пользователя, K: PIN-code, L: Номер телефон
+        
+        row_data = [
+            transaction_data.get('amount', ''),                    # A: Сумма USDT
+            transaction_data.get('initiator_user_id', ''),         # B: ID инициатора
+            transaction_data.get('tx_hash_user_id', ''),           # C: ID введшего хеш
+            transaction_data.get('network', ''),                   # D: Сеть
+            transaction_data.get('operation', ''),                 # E: Операция
+            transaction_data.get('tx_hash', ''),                  # F: Хеш транзакции
+            transaction_data.get('started_at', ''),                # G: Время начала
+            transaction_data.get('status', ''),                    # H: Статус
+            datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S'), # I: Время записи
+            transaction_data.get('pin_user_id', transaction_data.get('initiator_user_id', '')), # J: ID пользователя
+            transaction_data.get('pin_code', ''),                  # K: PIN-code
+            transaction_data.get('phone_number', '')                # L: Номер телефон
+        ]
+        
+        # Вставляем строку в позицию 2 (сразу после заголовков)
+        # Это обеспечит добавление новых транзакций в верх таблицы
+        sheet.insert_row(row_data, 2)
+        
+        print(f"✅ Данные TRC транзакции сохранены в Google Sheets с PIN-кодом и номером телефона")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении данных TRC транзакции: {e}")
+        return False
+
+def update_trc_transaction_status(tx_hash: str, status: str) -> bool:
+    """Обновляет статус транзакции в листе TRC"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем лист TRC
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
+        
+        # Ищем ячейку с transaction_hash (колонка F - 6-я колонка)
+        cell = sheet.find(tx_hash)
+        
+        if cell:
+            # Обновляем статус в колонке H (8-я колонка)
+            sheet.update_cell(cell.row, 8, status)
+            print(f"✅ Статус транзакции {tx_hash} обновлен на {status} в строке {cell.row}")
+            return True
+        else:
+            print(f"❌ Транзакция {tx_hash} не найдена в листе TRC")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении статуса TRC транзакции: {e}")
+        return False
+
+def update_trc_transaction_hash(old_tx_hash: str, new_tx_hash: str) -> bool:
+    """Обновляет хеш транзакции в листе TRC"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем лист TRC
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
+        
+        # Получаем все записи для поиска
+        records = sheet.get_all_records()
+        
+        # Ищем строку с пустым хешем транзакции (первая строка с пустым хешем)
+        for i, record in enumerate(records, start=2):  # начинаем с 2-й строки (после заголовков)
+            tx_hash = record.get('Хеш транзакции', '')
+            # Безопасно преобразуем в строку и убираем пробелы
+            tx_hash_str = str(tx_hash).strip() if tx_hash is not None else ''
+            if not tx_hash_str or tx_hash_str == old_tx_hash:  # Если ячейка пустая или содержит старый хеш
+                sheet.update_cell(i, 6, new_tx_hash)  # Обновляем хеш транзакции в колонке F
+                print(f"✅ Хеш транзакции обновлен на {new_tx_hash} в строке {i}")
+                return True
+        
+        print(f"❌ Не удалось найти подходящую ячейку для хеша транзакции")
+        return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении хеша TRC транзакции: {e}")
+        return False
+
+def update_trc_transaction_phone(user_id: int, phone_number: str) -> bool:
+    """Обновляет номер телефона в листе TRC для конкретного пользователя"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
+        client = gspread.authorize(creds)
+        
+        # Открываем лист TRC
+        sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Отслеживание транзакций TRC')
+        
+        # Получаем все записи для поиска
+        records = sheet.get_all_records()
+        
+        # Ищем строку с данным user_id в колонке B (ID инициатора)
+        for i, record in enumerate(records, start=2):  # начинаем с 2-й строки (после заголовков)
+            # Проверяем разные варианты ID инициатора
+            initiator_id = record.get('ID инициатора', '')
+            # Безопасно преобразуем в строку и убираем пробелы
+            initiator_id_str = str(initiator_id).strip() if initiator_id is not None else ''
+            if str(user_id) == initiator_id_str:
+                # Обновляем номер телефона в колонке L (12-я колонка)
+                sheet.update_cell(i, 12, phone_number)
+                print(f"✅ Номер телефона {phone_number} обновлен для пользователя {user_id} в строке {i}")
+                return True
+        
+        print(f"❌ Пользователь {user_id} не найден в листе TRC. Доступные ID: {[r.get('ID инициатора', '') for r in records[:3]]}")
+        return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении номера телефона TRC транзакции: {e}")
         return False

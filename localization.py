@@ -344,6 +344,76 @@ MESSAGES = {
         "ua": "👤 Введіть ваше ім'я:",
         "en": "👤 Enter your name:"
     },
+    "pin_security_notice": {
+        "ru": "🔐 Для безопасности от мошенников необходимо сгенерировать PIN-код.\n\nНажмите кнопку ниже для генерации уникального 5-значного PIN-кода:",
+        "ua": "🔐 Для безпеки від шахраїв необхідно згенерувати PIN-код.\n\nНатисніть кнопку нижче для генерації унікального 5-значного PIN-кода:",
+        "en": "🔐 For security against fraudsters, you need to generate a PIN code.\n\nPress the button below to generate a unique 5-digit PIN code:"
+    },
+    "generate_pin": {
+        "ru": "🔑 Сгенерировать PIN-код",
+        "ua": "🔑 Згенерувати PIN-код",
+        "en": "🔑 Generate PIN code"
+    },
+    "pin_generated": {
+        "ru": "✅ Ваш PIN-код: **{pin_code}**\n\n⚠️ Сохраните этот код! Он понадобится для подтверждения операции.\n\n⏰ PIN-код действителен в течение 1 часа.",
+        "ua": "✅ Ваш PIN-код: **{pin_code}**\n\n⚠️ Збережіть цей код! Він знадобиться для підтвердження операції.\n\n⏰ PIN-код дійсний протягом 1 години.",
+        "en": "✅ Your PIN code: **{pin_code}**\n\n⚠️ Save this code! It will be needed to confirm the operation.\n\n⏰ PIN code is valid for 1 hour."
+    },
+    "pin_generation_error": {
+        "ru": "❌ Ошибка генерации PIN-кода. Попробуйте еще раз.",
+        "ua": "❌ Помилка генерації PIN-кода. Спробуйте ще раз.",
+        "en": "❌ Error generating PIN code. Please try again."
+    },
+    "enter_pin": {
+        "ru": "🔐 Введите ваш PIN-код (5 цифр):",
+        "ua": "🔐 Введіть ваш PIN-код (5 цифр):",
+        "en": "🔐 Enter your PIN code (5 digits):"
+    },
+    "invalid_pin_format": {
+        "ru": "❌ Неверный формат PIN-кода. Введите 5 цифр.",
+        "ua": "❌ Невірний формат PIN-кода. Введіть 5 цифр.",
+        "en": "❌ Invalid PIN code format. Enter 5 digits."
+    },
+    "pin_verified": {
+        "ru": "✅ PIN-код подтвержден! Теперь вы можете ввести хеш транзакции.",
+        "ua": "✅ PIN-код підтверджено! Тепер ви можете ввести хеш транзакції.",
+        "en": "✅ PIN code confirmed! Now you can enter the transaction hash."
+    },
+    "pin_invalid": {
+        "ru": "❌ PIN-код неверный или не принадлежит вашему аккаунту.\n\nВы можете вернуться на главную или сгенерировать новый PIN-код.",
+        "ua": "❌ PIN-код невірний або не належить вашому акаунту.\n\nВи можете повернутися на головну або згенерувати новий PIN-код.",
+        "en": "❌ PIN code is incorrect or does not belong to your account.\n\nYou can return to the main menu or generate a new PIN code."
+    },
+    "transaction_verified": {
+        "ru": "✅ Транзакция успешно подтверждена!\n\nТеперь укажите ваш контакт для связи (номер телефона или Telegram).",
+        "ua": "✅ Транзакція успішно підтверджена!\n\nТепер вкажіть ваш контакт для зв'язку (номер телефону або Telegram).",
+        "en": "✅ Transaction successfully confirmed!\n\nNow provide your contact for communication (phone number or Telegram)."
+    },
+    "enter_tx_hash": {
+        "ru": "🔗 Введите хеш транзакции или ссылку на транзакцию:",
+        "ua": "🔗 Введіть хеш транзакції або посилання на транзакцію:",
+        "en": "🔗 Enter transaction hash or transaction link:"
+    },
+    "enter_contact": {
+        "ru": "📱 Введите ваш контакт для связи (номер телефона или Telegram):",
+        "ua": "📱 Введіть ваш контакт для зв'язку (номер телефону або Telegram):",
+        "en": "📱 Enter your contact for communication (phone number or Telegram):"
+    },
+    "hash_already_used": {
+        "ru": "❌ Ты лузер! Этот хеш транзакции уже использовался ранее.",
+        "ua": "❌ Ти лузер! Цей хеш транзакції вже використовувався раніше.",
+        "en": "❌ You're a loser! This transaction hash has already been used before."
+    },
+    "transaction_processing": {
+        "ru": "⏳ Транзакция передана на проверку. Ожидайте уведомления о результате.",
+        "ua": "⏳ Транзакція передана на перевірку. Очікуйте сповіщення про результат.",
+        "en": "⏳ Transaction submitted for verification. Wait for notification about the result."
+    },
+    "tx_failed": {
+        "ru": "❌ Ошибка проверки транзакции: {error}",
+        "ua": "❌ Помилка перевірки транзакції: {error}",
+        "en": "❌ Transaction verification error: {error}"
+    },
 }
 
 def get_message(key, lang="ru", **kwargs):

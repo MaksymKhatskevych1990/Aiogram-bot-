@@ -192,11 +192,14 @@ async def show_current_rates(message: types.Message, state: FSMContext):
 
 # Регистрируем хендлеры
 def register_start_handlers(dp: Dispatcher):
+    # 1. /start — всегда срабатывает
     dp.message.register(start_command, Command("start"))
+
+    # 2. FSM шаги
     dp.message.register(handle_start_button, StateFilter(StartFSM.waiting_start))
     dp.message.register(set_language, StateFilter(StartFSM.language))
     dp.message.register(choose_action, StateFilter(StartFSM.action))
-    
-    # Универсальный обработчик для кнопок навигации (работает как fallback)
-    # Регистрируем его с низким приоритетом
+
+    # 3. Универсальный обработчик для кнопок навигации (работает в любом состоянии)
+    # Ставим его с низким приоритетом, чтобы он проверялся после всех остальных
     dp.message.register(handle_navigation_buttons, lambda message: True)

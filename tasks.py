@@ -29,14 +29,14 @@ def celery_task_fallback(func):
         return func
 
 from networks.ethereum import check_transaction_stages
-from handlers.crypto import send_telegram_notification
+from handlers.crypto import send_telegram_notification, check_transaction_hash_uniqueness, mark_transaction_hash_as_used
 from google_utils import save_transaction_hash, update_transaction_status
 from config import logger
 
 # --- Настройки ---
 
 PENDING_TTL = 3 * 60 * 60                  # 3 часа TTL ключа
-MAX_PENDING_DURATION = timedelta(minutes=2)  # в тексте так и было – 2 часа
+MAX_PENDING_DURATION = timedelta(hours=1)  # в тексте так и было – 2 часа
 
 r = redis.Redis.from_url(REDIS_URL, db=0, decode_responses=True)
 
@@ -135,6 +135,19 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
         logger.error("Redis недоступен для check_erc20_confirmation_task")
         return
 
+    # НОВОЕ: Проверяем уникальность хеша транзакции
+    uniqueness_check = check_transaction_hash_uniqueness(tx_hash)
+    if not uniqueness_check["unique"]:
+        logger.warning(f"Попытка повторного использования хеша {tx_hash} в ERC20 задаче")
+        # Отправляем уведомление пользователю
+        msg = {
+            "msg_status": "hash_already_used",
+            "lang": lang,
+            "error": uniqueness_check['error']
+        }
+        run_async_coroutine(send_telegram_notification(chat_id, msg))
+        return
+
     key = _redis_key(tx_hash)
     kyiv_tz = ZoneInfo("Europe/Kyiv")
     now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")
@@ -162,6 +175,9 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
         save_transaction_hash(google_params)
 
         if result.get("success") and result.get("status") == "confirmed":
+            # НОВОЕ: Отмечаем хеш как использованный после успешной проверки
+            mark_transaction_hash_as_used(tx_hash, username, "ERC20")
+            
             google_update_params = {"status": [result.get("status"), 6]}
             msg = {
                 "msg_status": "tx_confirmed",
@@ -171,7 +187,7 @@ def check_erc20_confirmation_task(tx_hash, target_address, username, chat_id, bo
                 "timestamp": result.get("timestamp", "N/A"),
             }
             
-            update_transaction_status(tx_hash, google_update_params)
+            # update_transaction_status(tx_hash, google_update_params)
             run_async_coroutine(_advance_fsm_state(
                 username=username,
                 chat_id=chat_id,
@@ -265,6 +281,9 @@ def periodic_check_pending_transactions():
                 logger.info(f"[BEAT] {tx_hash} result: {result}")
 
                 if result.get("success"):
+                    # НОВОЕ: Отмечаем хеш как использованный после успешной проверки
+                    mark_transaction_hash_as_used(tx_hash, username, "ERC20")
+                    
                     google_update_params = {"status": [result.get("status"), 6], "date_confirmation": [now, 5]}
                     msg = {
                         "msg_status": "tx_confirmed",
@@ -274,7 +293,7 @@ def periodic_check_pending_transactions():
                         "timestamp": result.get("timestamp", "N/A"),
                     }
                     run_async_coroutine(send_telegram_notification(chat_id, msg))
-                    update_transaction_status(tx_hash, google_update_params)
+                    # update_transaction_status(tx_hash, google_update_params)
                     run_async_coroutine(_advance_fsm_state(
                         username=username,
                         chat_id=chat_id,
@@ -312,7 +331,7 @@ def periodic_check_pending_transactions():
                         
                     google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
                     run_async_coroutine(send_telegram_notification(chat_id, msg))
-                    update_transaction_status(tx_hash, google_update_params)
+                    # update_transaction_status(tx_hash, google_update_params)
 
                     r.delete(key)
                     continue
@@ -322,4 +341,173 @@ def periodic_check_pending_transactions():
                 continue
 
     except Exception as e:
-        logger.error(f"Критическая ошибка в periodic_check_pending_transactions: {e}") 
+        logger.error(f"Критическая ошибка в periodic_check_pending_transactions: {e}")
+
+@celery_task_fallback
+def check_confirmation_task(tx_hash, target_address, username, chat_id, bot_id, lang, network):
+    """
+    Универсальная задача для проверки транзакций в зависимости от сети
+    """
+    if not r:
+        logger.error("Redis недоступен для check_confirmation_task")
+        return
+
+    # Проверяем уникальность хеша транзакции
+    uniqueness_check = check_transaction_hash_uniqueness(tx_hash)
+    if not uniqueness_check["unique"]:
+        logger.warning(f"Попытка повторного использования хеша {tx_hash} в задаче проверки {network}")
+        # Отправляем уведомление пользователю
+        msg = {
+            "msg_status": "hash_already_used",
+            "lang": lang,
+            "error": uniqueness_check['error']
+        }
+        run_async_coroutine(send_telegram_notification(chat_id, msg))
+        return
+
+    kyiv_tz = ZoneInfo("Europe/Kyiv")
+    now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")
+
+    try:
+        if network == "TRC20":
+            # Импортируем функцию проверки TRON транзакций
+            from networks.tron import check_tron_transaction
+            
+            # Запускаем асинхронную проверку TRON транзакции
+            result = run_async_coroutine(check_tron_transaction(tx_hash, target_address))
+            
+            if result.get("success"):
+                # Отмечаем хеш как использованный после успешной проверки
+                mark_transaction_hash_as_used(tx_hash, username, network)
+                
+                msg = {
+                    "msg_status": "tx_confirmed",
+                    "lang": lang,
+                    "amount_result": result.get("amount", "N/A"),
+                    "target_address": target_address,
+                    "timestamp": result.get("timestamp", "N/A"),
+                }
+                
+                # Переходим к следующему состоянию FSM
+                run_async_coroutine(_advance_fsm_state(
+                    username=username,
+                    chat_id=chat_id,
+                    bot_id=bot_id,
+                    next_state=CryptoFSM.contact,
+                    extra={
+                        "amount_result": result.get("amount", "N/A"),
+                        "tx_hash": tx_hash,
+                        "target_address": target_address,
+                        "timestamp": result.get("timestamp", "N/A"),
+                    },
+                ))
+                run_async_coroutine(send_telegram_notification(chat_id, msg))
+            else:
+                # Ошибка проверки TRON транзакции
+                msg = {
+                    "msg_status": "tx_failed",
+                    "lang": lang,
+                    "error": result.get("error", "Ошибка проверки транзакции")
+                }
+                run_async_coroutine(send_telegram_notification(chat_id, msg))
+                
+        elif network == "ERC20":
+            # Используем существующую логику для ERC20
+            key = _redis_key(tx_hash)
+            stage_set = {"in_block", "is_erc20", "recipient", "transfer_params", "confirmations"}
+
+            result = run_async_coroutine(check_transaction_stages(tx_hash, target_address, stage_set))
+            code = result.get("code", "") != "low_confirmations"
+            amount = result.get("amount", "N/A")
+
+            logger.info(f"[check_confirmation_task] ERC20 result: {result}")
+
+            # сохраняем в Google сразу «как есть»
+            google_params = [username, 
+                             tx_hash, 
+                             target_address, 
+                             result.get("timestamp", "N/A"), 
+                             now, 
+                             result.get("status", "pending"), 
+                             amount, 
+                             result.get("error", "") if code else ''
+                        ]
+
+            save_transaction_hash(google_params)
+
+            if result.get("success") and result.get("status") == "confirmed":
+                # Отмечаем хеш как использованный после успешной проверки
+                mark_transaction_hash_as_used(tx_hash, username, network)
+                
+                google_update_params = {"status": [result.get("status"), 6]}
+                msg = {
+                    "msg_status": "tx_confirmed",
+                    "lang": lang,
+                    "amount_result": amount,
+                    "target_address": target_address,
+                    "timestamp": result.get("timestamp", "N/A"),
+                }
+                
+                run_async_coroutine(_advance_fsm_state(
+                    username=username,
+                    chat_id=chat_id,
+                    bot_id=bot_id,
+                    next_state=CryptoFSM.contact,
+                    extra={
+                        "amount_result": amount,
+                        "tx_hash": tx_hash,
+                        "target_address": target_address,
+                        "timestamp": result.get("timestamp", "N/A"),
+                    },
+                ))
+                run_async_coroutine(send_telegram_notification(chat_id, msg))
+                return
+            else:
+                if not r.exists(key):
+                    _store_initial(username, chat_id, bot_id, tx_hash, target_address, lang, amount)
+
+            # not success → обновим стадии/ошибку и оставим ключ
+            stage_left = result.get("stage", [])
+            _update_stage(key, stage_left)
+            _update_error(key, result.get("code", ""), result.get("error", ""))
+
+            # для «фатальных» кейсов сразу уведомим
+            code = result.get("code")
+            if code in ("invalid_token", "invalid_recipient"):
+                google_update_params = {"status": result.get("status")}
+                msg = {                
+                    "lang": lang,
+                    "amount_result": amount,
+                    "target_address": target_address,
+                    "timestamp": result.get("timestamp", "N/A"),
+                }
+                if code == "invalid_token":
+                    msg.update({"msg_status": "invalid_token"})
+                else:
+                    msg.update({"msg_status": "invalid_recipient"})
+                    
+                google_update_params = {"status": [result.get("status"), 6], "error": [result.get("error",""), 8]}
+                run_async_coroutine(send_telegram_notification(chat_id, msg))
+                update_transaction_status(tx_hash, google_update_params)
+                
+                r.delete(key)
+            else:
+                # pending — просто оставляем на periodic beat
+                _touch_ttl(key)
+        else:
+            logger.error(f"Неподдерживаемая сеть: {network}")
+            msg = {
+                "msg_status": "tx_failed",
+                "lang": lang,
+                "error": f"Неподдерживаемая сеть: {network}"
+            }
+            run_async_coroutine(send_telegram_notification(chat_id, msg))
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки транзакции {tx_hash} в сети {network}: {e}")
+        msg = {
+            "msg_status": "tx_failed",
+            "lang": lang,
+            "error": f"Ошибка проверки транзакции: {str(e)}"
+        }
+        run_async_coroutine(send_telegram_notification(chat_id, msg)) 
