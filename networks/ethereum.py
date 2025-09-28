@@ -5,11 +5,11 @@ import asyncio
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
-from config import ETHERSCAN_API_KEY, ERC20_CONFIRMATIONS, logger
+from config import ETHERSCAN_API_KEY, ERC20_CONFIRMATIONS, USDT_ERC20_CONTRACT, ETHERSCAN_API, logger
 from utils.decode_etc20 import decode_erc20_input
 
-USDT_CONTRACT = "0xdac17f958d2ee523a2206206994597c13d831ec7".lower()
-ETHERSCAN_URL = "https://api.etherscan.io/api"
+USDT_CONTRACT = USDT_ERC20_CONTRACT
+ETHERSCAN_URL = ETHERSCAN_API
 
 def hex_to_int(value):
     """Преобразует hex-строку в целое число"""
@@ -422,3 +422,223 @@ async def check_transaction_stages(tx_hash: str, target_address: str, stage_set:
             "stage": list(stage_left), 
             "error": str(e)
         }
+
+
+# =============================================================================
+# ФУНКЦИИ ДЛЯ МОНИТОРИНГА ТРАНЗАКЦИЙ ERC20
+# =============================================================================
+
+async def get_recent_erc20_transactions(session, wallet_address: str, limit: int = 50) -> dict:
+    """
+    Получает последние ERC20 транзакции для указанного адреса кошелька
+    """
+    try:
+        params = {
+            "module": "account",
+            "action": "tokentx",
+            "contractaddress": USDT_CONTRACT,
+            "address": wallet_address,
+            "page": 1,
+            "offset": limit,
+            "sort": "desc",
+            "apikey": ETHERSCAN_API_KEY
+        }
+        
+        data = await _get(session, params)
+        
+        if not data or data.get("status") == "0":
+            error = data.get("message", "Ошибка получения транзакций")
+            logger.error(f"[ethereum] Ошибка получения транзакций: {error}")
+            return _failed(TxCode.API_ERROR, stage=["api_error"], error=error)
+        
+        transactions = data.get("result", [])
+        logger.info(f"[ethereum] Получено {len(transactions)} ERC20 транзакций")
+        
+        return {"success": True, "data": transactions}
+        
+    except Exception as e:
+        logger.error(f"[ethereum] Ошибка получения ERC20 транзакций: {e}")
+        return _failed(TxCode.INTERNAL_ERROR, stage=["internal_error"], error=str(e))
+
+async def get_erc20_transaction_by_hash(session, tx_hash: str) -> dict:
+    """
+    Получает ERC20 транзакцию по хешу
+    """
+    try:
+        # Сначала получаем транзакцию через eth_getTransactionByHash
+        tx_resp = await fetch_transaction(session, tx_hash)
+        if not tx_resp["success"]:
+            return tx_resp
+        
+        tx_data = tx_resp["data"]
+        
+        # Проверяем, что это ERC20 транзакция USDT
+        if tx_data.get("to", "").lower() != USDT_CONTRACT:
+            return _failed(TxCode.INVALID_TOKEN, stage=["contract_check"], error="Не USDT (ERC20)")
+        
+        return {"success": True, "data": tx_data}
+        
+    except Exception as e:
+        logger.error(f"[ethereum] Ошибка получения ERC20 транзакции: {e}")
+        return _failed(TxCode.INTERNAL_ERROR, stage=["internal_error"], error=str(e))
+
+async def check_erc20_transaction_for_pin_match(session, tx_hash: str, target_wallet: str, 
+                                               expected_amount: float, pin_code: str) -> dict:
+    """
+    Проверяет ERC20 транзакцию на соответствие PIN-коду
+    """
+    try:
+        # Получаем транзакцию
+        tx_resp = await get_erc20_transaction_by_hash(session, tx_hash)
+        if not tx_resp["success"]:
+            return tx_resp
+        
+        tx_data = tx_resp["data"]
+        
+        # Проверяем получателя
+        recipient_resp = await check_recipient(tx_data, target_wallet)
+        if not recipient_resp["success"]:
+            return recipient_resp
+        
+        # Декодируем input для получения суммы
+        try:
+            decoded = decode_erc20_input(tx_data.get("input", "0x"))
+            if not decoded:
+                return _failed(TxCode.DECODE_ERROR, stage=["decode_error"], error="Не удалось декодировать input")
+            
+            amount = decoded["amount"] / 10**6  # USDT имеет 6 знаков после запятой
+            
+        except Exception as e:
+            return _failed(TxCode.DECODE_ERROR, stage=["decode_error"], error=f"Ошибка декодирования: {str(e)}")
+        
+        # Проверяем соответствие суммы (с погрешностью 0.01 USDT)
+        logger.info(f"[ethereum] Проверяем сумму: {amount} vs ожидаемая: {expected_amount}")
+        if abs(amount - expected_amount) > 0.01:
+            logger.info(f"[ethereum] Сумма не соответствует: {amount} != {expected_amount}")
+            return _failed(
+                TxCode.INVALID_RECIPIENT,
+                stage=["amount_check"],
+                error=f"Сумма не соответствует ожидаемой: {amount} != {expected_amount}"
+            )
+        
+        logger.info(f"[ethereum] Сумма соответствует PIN-коду {pin_code}")
+        
+        # Проверяем, что транзакция в блоке
+        block_resp = await check_in_block(tx_data)
+        if not block_resp["success"]:
+            return block_resp
+        
+        # Проверяем подтверждения
+        conf_resp = await check_confirmations(session, tx_data.get("blockNumber"))
+        if not conf_resp["success"]:
+            # Получаем timestamp блока
+            timestamp_resp = await check_timestamp_amount(session, tx_data)
+            timestamp = timestamp_resp.get("timestamp", "N/A") if timestamp_resp.get("success") else "N/A"
+            
+            return _pending(
+                conf_resp["code"],
+                stage=conf_resp.get("stage", ["confirmations"]),
+                amount=amount,
+                from_address=tx_data.get("from", ""),
+                to_address=decoded["to"],
+                timestamp=timestamp,
+                confirmations=conf_resp.get("confirmations", 0),
+                pin_code=pin_code,
+                error=conf_resp.get("error", "")
+            )
+        
+        # Все проверки пройдены
+        timestamp_resp = await check_timestamp_amount(session, tx_data)
+        timestamp = timestamp_resp.get("timestamp", "N/A") if timestamp_resp.get("success") else "N/A"
+        
+        return _ok(
+            stage=["completed"],
+            amount=amount,
+            from_address=tx_data.get("from", ""),
+            to_address=decoded["to"],
+            timestamp=timestamp,
+            confirmations=conf_resp["confirmations"],
+            pin_code=pin_code
+        )
+        
+    except Exception as e:
+        logger.error(f"[ethereum] Ошибка проверки ERC20 транзакции для PIN: {e}")
+        return _failed(TxCode.INTERNAL_ERROR, stage=["internal_error"], error=str(e))
+
+async def monitor_erc20_wallet_for_new_transactions(session, wallet_address: str, 
+                                                   active_pins: list) -> dict:
+    """
+    Мониторит ERC20 кошелек на предмет новых транзакций, соответствующих активным PIN-кодам
+    """
+    try:
+        # Получаем последние транзакции
+        tx_resp = await get_recent_erc20_transactions(session, wallet_address, limit=20)
+        if not tx_resp["success"]:
+            return tx_resp
+        
+        transactions = tx_resp["data"]
+        matched_transactions = []
+        
+        logger.info(f"[ethereum] Получено {len(transactions)} ERC20 транзакций для мониторинга {wallet_address}")
+        
+        for tx in transactions:
+            tx_hash = tx.get("hash")
+            if not tx_hash:
+                continue
+            
+            logger.info(f"[ethereum] Проверяем ERC20 транзакцию: {tx_hash}")
+            
+            # Проверяем каждую транзакцию против активных PIN-кодов
+            for pin_data in active_pins:
+                pin_code = pin_data.get("pin_code")
+                expected_amount = float(pin_data.get("amount", 0).replace(",", ""))
+                
+                if not pin_code or expected_amount <= 0:
+                    continue
+                
+                # Проверяем, что это входящая транзакция к нашему адресу
+                if tx.get("to", "").lower() != wallet_address.lower():
+                    continue
+                
+                # Проверяем сумму
+                tx_value = int(tx.get("value", 0))
+                decimals = int(tx.get("tokenDecimal", 6))
+                tx_amount = tx_value / (10 ** decimals)
+                
+                logger.info(f"[ethereum] Проверяем сумму: {tx_amount} vs ожидаемая: {expected_amount}")
+                
+                if abs(tx_amount - expected_amount) > 0.01:
+                    continue
+                
+                logger.info(f"[ethereum] Найдена соответствующая ERC20 транзакция: {tx_hash} для PIN {pin_code}")
+                
+                # Проверяем подтверждения
+                conf_resp = await check_confirmations(session, tx.get("blockNumber"))
+                tx_status = "confirmed" if conf_resp.get("success") else "pending"
+                
+                # Конвертируем timestamp
+                timestamp_int = int(tx.get("timeStamp", 0))
+                dt = datetime.fromtimestamp(timestamp_int, tz=timezone.utc)
+                
+                matched_transactions.append({
+                    "tx_hash": tx_hash,
+                    "pin_data": pin_data,
+                    "transaction_data": {
+                        "status": tx_status,
+                        "amount": tx_amount,
+                        "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                        "confirmations": conf_resp.get("confirmations", 0) if conf_resp.get("success") else 0,
+                        "from_address": tx.get("from"),
+                        "to_address": tx.get("to")
+                    }
+                })
+        
+        return {
+            "success": True,
+            "matched_transactions": matched_transactions,
+            "total_checked": len(transactions)
+        }
+        
+    except Exception as e:
+        logger.error(f"[ethereum] Ошибка мониторинга ERC20 кошелька: {e}")
+        return _failed(TxCode.INTERNAL_ERROR, stage=["internal_error"], error=str(e))

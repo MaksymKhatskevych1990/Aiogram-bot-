@@ -3,12 +3,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from datetime import datetime
 
 
 
 
-from google_utils import get_wallet_address, is_duplicate_transaction, verify_transaction, update_transaction_status
-from utils.validators import is_valid_tx_hash
+from google_utils import get_wallet_address, is_duplicate_transaction, verify_transaction, update_transaction_status, save_pin_code
+from utils.validators import is_valid_tx_hash, is_valid_wallet_address
 from utils.extract_hash_in_url import extract_tx_hash
 from keyboards import get_network_keyboard_with_back, get_back_keyboard, get_crypto_operation_keyboard, get_action_keyboard
 from utils.generate_qr_code import generate_wallet_qr
@@ -24,10 +25,15 @@ class CryptoFSM(StatesGroup):
     network = State()
     amount = State()
     client_wallet = State()  # для режима "Купить USDT"
-    transaction_hash = State()  # для режима "Продать USDT"
+    # transaction_hash = State()  # для режима "Продать USDT" (СТАРОЕ - будет удалено)
     client_name = State()  # для режима "Купить USDT" - имя пользователя
     contact = State()
     verification = State()
+    
+    # НОВЫЕ СОСТОЯНИЯ ДЛЯ PIN-СИСТЕМЫ
+    user_wallet = State()      # Ввод кошелька пользователя для продажи USDT
+    pin_generated = State()    # PIN сгенерирован, ожидание перевода
+    phone_input = State()      # Ввод номера телефона
 
 # Команда /crypto
 async def start_crypto(message: types.Message, state: FSMContext):
@@ -90,19 +96,19 @@ async def get_network(message: types.Message, state: FSMContext):
     operation = operation_data.get('operation', '').strip()
     
     # QR код и адрес кошелька показываем только при продаже USDT
-    if operation == get_message("crypto_sell_usdt", operation_data.get("language", "ru")):
-        wallet_address = get_wallet_address(message.text)
-        await state.update_data(wallet_address=wallet_address)
+    # if operation == get_message("crypto_sell_usdt", operation_data.get("language", "ru")):
+    #     wallet_address = get_wallet_address(message.text)
+    #     await state.update_data(wallet_address=wallet_address)
         
-        if wallet_address:
-            logo_path = "img/logo-qr.png"
-            await message.answer(
-                get_message("send_to_address", operation_data.get("language", "ru"), wallet_address=wallet_address, network=message.text),
-                parse_mode="Markdown"
-            )
-            await generate_wallet_qr(message.bot, message.chat.id, wallet_address, message.text, logo_path, operation_data.get("language", "ru"))
-        else:
-            await message.answer(get_message("address_error", operation_data.get("language", "ru")))
+    #     if wallet_address:
+    #         logo_path = "img/logo-qr.png"
+    #         await message.answer(
+    #             get_message("send_to_address", operation_data.get("language", "ru"), wallet_address=wallet_address, network=message.text),
+    #             parse_mode="Markdown"
+    #         )
+    #         await generate_wallet_qr(message.bot, message.chat.id, wallet_address, message.text, logo_path, operation_data.get("language", "ru"))
+    #     else:
+    #         await message.answer(get_message("address_error", operation_data.get("language", "ru")))
     
     await message.answer(get_message("enter_amount", operation_data.get("language", "ru")), reply_markup=get_back_keyboard(operation_data.get("language", "ru")))
     await state.set_state(CryptoFSM.amount)
@@ -213,19 +219,12 @@ async def get_amount(message: types.Message, state: FSMContext):
                 usd_to_receive=commission_result['final_amount']  # сколько USD получит
             )
             
-            # При продаже USDT показываем инструкцию (адрес уже показан при выборе сети)
-            final_amount = f"{commission_result['final_amount']:.2f}"
+            # НОВАЯ ЛОГИКА: При продаже USDT запрашиваем кошелек пользователя
             await message.answer(
-                f"{get_message('sell_instruction_header', lang)}\n\n"
-                f"{get_message('sell_instruction_step1', lang, amount=f'{amount:.2f}')}\n"
-                f"{get_message('sell_instruction_step2', lang)}\n"
-                f"{get_message('sell_instruction_step3', lang)}\n\n"
-                f"{get_message('sell_instruction_final', lang, amount=final_amount)}",
-                parse_mode="Markdown"
+                get_message("enter_user_wallet", lang),
+                reply_markup=get_back_keyboard(lang)
             )
-            
-            await message.answer(get_message("enter_tx_hash", lang), reply_markup=get_back_keyboard(lang))
-            await state.set_state(CryptoFSM.transaction_hash)
+            await state.set_state(CryptoFSM.user_wallet)
         else:
             await message.answer(f"❌ Ошибка расчета комиссии: {commission_result['error']}")
 
@@ -477,6 +476,178 @@ async def get_contact(message: types.Message, state: FSMContext):
 
         await state.clear()
 
+# =============================================================================
+# НОВЫЕ ОБРАБОТЧИКИ ДЛЯ PIN-СИСТЕМЫ
+# =============================================================================
+
+# Обработчик ввода кошелька пользователя
+async def get_user_wallet(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # Проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        await message.answer(get_message("enter_amount", lang), reply_markup=get_back_keyboard(lang))
+        await state.set_state(CryptoFSM.amount)
+        return
+    
+    user_wallet = message.text.strip()
+    network = data.get('network')
+    
+    # Валидация кошелька
+    if not is_valid_wallet_address(user_wallet, network):
+        await message.answer(
+            get_message("invalid_wallet_format", lang, network=network),
+            reply_markup=get_back_keyboard(lang)
+        )
+        return
+    
+    # Проверяем, что пользователь не ввел адрес бота
+    bot_wallet = get_wallet_address(network)
+    if user_wallet.lower() == bot_wallet.lower():
+        await message.answer(
+            get_message("cannot_use_bot_wallet", lang),
+            reply_markup=get_back_keyboard(lang)
+        )
+        return
+    
+    # Сохраняем кошелек пользователя
+    await state.update_data(user_wallet=user_wallet)
+    
+    # Генерируем PIN-код и сохраняем в таблицу
+    bot_wallet = get_wallet_address(network)
+    amount = data.get('usdt_amount')
+    user_id = message.from_user.id
+    
+    # Генерируем PIN-код (телефон будет добавлен позже)
+    pin_code = save_pin_code(
+        user_wallet=user_wallet,
+        target_wallet=bot_wallet,
+        network=network,
+        amount=amount,
+        phone="",  # Пока пустой, будет заполнен позже
+        user_id=user_id,
+        chat_id=message.chat.id,  # Добавляем chat_id для уведомлений
+        expires_hours=1
+    )
+    
+    if not pin_code:
+        await message.answer(
+            get_message("pin_generation_error", lang),
+            reply_markup=get_back_keyboard(lang)
+        )
+        return
+    
+    # Сохраняем PIN-код в состояние
+    await state.update_data(pin_code=pin_code)
+    
+    # Показываем адрес для перевода с PIN-кодом
+    await message.answer(
+        get_message("send_to_address_with_pin", lang, 
+                   wallet_address=bot_wallet, 
+                   network=network,
+                   pin_code=pin_code,
+                   amount=f"{amount:.2f}"),
+        parse_mode="Markdown"
+    )
+    
+    # Генерируем QR-код
+    logo_path = "img/logo-qr.png"
+    await generate_wallet_qr(message.bot, message.chat.id, bot_wallet, network, logo_path, lang)
+    
+    # Запрашиваем номер телефона
+    await message.answer(
+        get_message("enter_phone_number", lang),
+        reply_markup=get_back_keyboard(lang)
+    )
+    await state.set_state(CryptoFSM.phone_input)
+
+# Обработчик ввода номера телефона
+async def get_phone_number(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    # Проверяем кнопку "Вернуться на главную"
+    if get_message("back_to_main", lang) in message.text:
+        await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+        from handlers.start import StartFSM
+        await state.set_state(StartFSM.action)
+        return
+    
+    if get_message("back", lang) in message.text:
+        # Возврат к вводу кошелька
+        await message.answer(
+            get_message("enter_user_wallet", lang),
+            reply_markup=get_back_keyboard(lang)
+        )
+        await state.set_state(CryptoFSM.user_wallet)
+        return
+    
+    phone = message.text.strip()
+    
+    # Сохраняем номер телефона
+    await state.update_data(phone=phone)
+    
+    # Обновляем PIN-код в таблице с номером телефона
+    pin_code = data.get('pin_code')
+    network = data.get('network', 'TRC20')
+    if pin_code:
+        from google_utils import update_pin_phone
+        update_pin_phone(pin_code, phone, network)
+    
+    # Показываем финальную инструкцию
+    await message.answer(
+        get_message("transaction_instructions", lang,
+                   pin_code=pin_code,
+                   amount=f"{data.get('usdt_amount', 0):.2f}",
+                   network=data.get('network', ''),
+                   wallet_address=get_wallet_address(data.get('network', ''))),
+        parse_mode="Markdown"
+    )
+    
+    # Отправляем заявку администратору
+    await send_admin_notification(message, data, pin_code)
+    
+    # Показываем подтверждение пользователю
+    await message.answer(
+        get_message("transaction_submitted", lang),
+        reply_markup=get_back_keyboard(lang)
+    )
+    
+    # Возвращаемся в главное меню
+    await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
+    from handlers.start import StartFSM
+    await state.set_state(StartFSM.action)
+
+# Отправка уведомления администратору
+async def send_admin_notification(message: types.Message, data: dict, pin_code: str):
+    """Отправляет заявку администратору с полными данными"""
+    try:
+        summary = (
+            f"🟢 *Новая заявка: Продать USDT*\n\n"
+            f"👤 Пользователь: @{message.from_user.username if message.from_user.username else 'N/A'}\n"
+            f"🌐 Сеть: {data.get('network', '')}\n"
+            f"💰 Сумма к продаже: {data.get('usdt_amount', '')} USDT\n"
+            f"💵 К получению: {data.get('usd_to_receive', '')} USD\n"
+            f"🏦 Кошелек пользователя: `{data.get('user_wallet', '')}`\n"
+            f"📱 Телефон: {data.get('phone', '')}\n"
+            f"🔑 PIN-код: `{pin_code}`\n"
+            f"🎯 Адрес для перевода: `{get_wallet_address(data.get('network', ''))}`\n"
+            f"⏰ Время создания: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        from config import ADMIN_CHAT_ID
+        await message.bot.send_message(ADMIN_CHAT_ID, summary, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при отправке уведомления администратору: {e}")
+
 # Регистрация хендлеров
 def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(start_crypto, Command("crypto"))
@@ -485,5 +656,9 @@ def register_crypto_handlers(dp: Dispatcher):
     dp.message.register(get_amount, StateFilter(CryptoFSM.amount))
     dp.message.register(get_client_name, StateFilter(CryptoFSM.client_name))
     dp.message.register(get_client_wallet, StateFilter(CryptoFSM.client_wallet))
-    dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
+    # dp.message.register(get_transaction_hash, StateFilter(CryptoFSM.transaction_hash))
     dp.message.register(get_contact, StateFilter(CryptoFSM.contact))
+    
+    # НОВЫЕ ХЕНДЛЕРЫ ДЛЯ PIN-СИСТЕМЫ
+    dp.message.register(get_user_wallet, StateFilter(CryptoFSM.user_wallet))
+    dp.message.register(get_phone_number, StateFilter(CryptoFSM.phone_input))

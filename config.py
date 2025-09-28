@@ -31,8 +31,13 @@ BSCSCAN_API_KEY = os.getenv('BSCSCAN_API_KEY')
 # TRONSCAN не требует API ключа для базовых запросов
 
 TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
-TRONSCAN_API = os.getenv('TRONSCAN_API')
+TRONSCAN_API = os.getenv('TRONSCAN_API', 'https://api.trongrid.io')
 ERC20_CONFIRMATIONS = int(os.getenv('ERC20_CONFIRMATIONS', '12'))
+ETHERSCAN_API = os.getenv('ETHERSCAN_API', 'https://api.etherscan.io/api')
+
+# Контракты токенов для валидации
+USDT_TRC20_CONTRACT = os.getenv('USDT_TRC20_CONTRACT', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
+USDT_ERC20_CONTRACT = os.getenv('USDT_ERC20_CONTRACT', '0xdac17f958d2ee523a2206206994597c13d831ec7').lower()
 
 # Redis Configuration для Railway
 REDIS_URL = os.getenv('REDIS_URL')
@@ -40,7 +45,6 @@ REDIS_DB_FSM = os.getenv('REDIS_DB_FSM')
 REDIS_BACKEND_DB = os.getenv('REDIS_BACKEND_DB')
 REDIS_KEY_PREFIX_ERC = os.getenv('REDIS_KEY_PREFIX_ERC')
 REDIS_KEY_PREFIX_TRC = os.getenv('REDIS_KEY_PREFIX_TRC')
-
 # Парсим Redis URL для совместимости с существующим кодом
 if REDIS_URL:
     try:

@@ -354,6 +354,48 @@ MESSAGES = {
         "ua": "👤 Введіть ваше ім'я:",
         "en": "👤 Enter your name:"
     },
+    
+    # НОВЫЕ СООБЩЕНИЯ ДЛЯ PIN-СИСТЕМЫ
+    "enter_user_wallet": {
+        "ru": "🏦 Введите адрес вашего кошелька для безопасности транзакции:",
+        "ua": "🏦 Введіть адресу вашого гаманця для безпеки транзакції:",
+        "en": "🏦 Enter your wallet address for transaction security:"
+    },
+    "invalid_wallet_format": {
+        "ru": "❌ Неверный формат адреса кошелька для сети {network}. Пожалуйста, введите корректный адрес.",
+        "ua": "❌ Невірний формат адреси гаманця для мережі {network}. Будь ласка, введіть коректну адресу.",
+        "en": "❌ Invalid wallet address format for {network} network. Please enter a correct address."
+    },
+    "cannot_use_bot_wallet": {
+        "ru": "❌ Вы не можете использовать адрес бота. Введите адрес вашего личного кошелька.",
+        "ua": "❌ Ви не можете використовувати адресу бота. Введіть адресу вашого особистого гаманця.",
+        "en": "❌ You cannot use the bot's address. Please enter your personal wallet address."
+    },
+    "pin_generation_error": {
+        "ru": "❌ Ошибка генерации PIN-кода. Попробуйте еще раз.",
+        "ua": "❌ Помилка генерації PIN-коду. Спробуйте ще раз.",
+        "en": "❌ PIN code generation error. Please try again."
+    },
+    "send_to_address_with_pin": {
+        "ru": "🎯 *Переведите средства*\n\n💰 Сумма: {amount} USDT\n🌐 Сеть: {network}\n🏦 Адрес: `{wallet_address}`\n🔑 PIN-код: `{pin_code}`\n\n⚠️ *ВАЖНО:* Укажите PIN-код в комментарии к переводу!",
+        "ua": "🎯 *Переведіть кошти*\n\n💰 Сума: {amount} USDT\n🌐 Мережа: {network}\n🏦 Адреса: `{wallet_address}`\n🔑 PIN-код: `{pin_code}`\n\n⚠️ *ВАЖЛИВО:* Вкажіть PIN-код в коментарі до переказу!",
+        "en": "🎯 *Transfer funds*\n\n💰 Amount: {amount} USDT\n🌐 Network: {network}\n🏦 Address: `{wallet_address}`\n🔑 PIN code: `{pin_code}`\n\n⚠️ *IMPORTANT:* Include PIN code in transfer comment!"
+    },
+    "enter_phone_number": {
+        "ru": "📱 Введите номер телефона для связи:",
+        "ua": "📱 Введіть номер телефону для зв'язку:",
+        "en": "📱 Enter phone number for contact:"
+    },
+    "transaction_instructions": {
+        "ru": "📋 *Инструкция по транзакции*\n\n🔑 Ваш PIN-код: `{pin_code}`\n💰 Сумма: {amount} USDT\n🌐 Сеть: {network}\n🏦 Адрес: `{wallet_address}`\n\n⏰ PIN-код действителен 1 час\n💡 Сохраните PIN-код для получения средств в обменнике",
+        "ua": "📋 *Інструкція по транзакції*\n\n🔑 Ваш PIN-код: `{pin_code}`\n💰 Сума: {amount} USDT\n🌐 Мережа: {network}\n🏦 Адреса: `{wallet_address}`\n\n⏰ PIN-код дійсний 1 годину\n💡 Збережіть PIN-код для отримання коштів в обміннику",
+        "en": "📋 *Transaction Instructions*\n\n🔑 Your PIN code: `{pin_code}`\n💰 Amount: {amount} USDT\n🌐 Network: {network}\n🏦 Address: `{wallet_address}`\n\n⏰ PIN code valid for 1 hour\n💡 Save PIN code to receive funds at exchange office"
+    },
+    "transaction_submitted": {
+        "ru": "✅ Заявка отправлена! Наш менеджер свяжется с вами после подтверждения транзакции.",
+        "ua": "✅ Заявку відправлено! Наш менеджер зв'яжеться з вами після підтвердження транзакції.",
+        "en": "✅ Application submitted! Our manager will contact you after transaction confirmation."
+    },
 }
 
 def get_message(key, lang="ru", **kwargs):
