@@ -4,11 +4,35 @@ import aiohttp
 import traceback
 import csv
 import json
+import time
+from functools import wraps
 from typing import Optional, Dict, Any
 from config import ETHERSCAN_API_KEY, BSCSCAN_API_KEY, TRONSCAN_API_KEY
 
 from config import logger, GOOGLE_CREDENTIALS 
 import datetime
+
+# Rate limiting для Google Sheets API
+_last_api_call = {}
+_min_interval = 1.5  # Минимум 1.5 секунды между вызовами
+
+def rate_limit_google_api(func):
+    """Декоратор для ограничения частоты вызовов Google Sheets API"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        current_time = time.time()
+        func_name = func.__name__
+        
+        if func_name in _last_api_call:
+            time_since_last = current_time - _last_api_call[func_name]
+            if time_since_last < _min_interval:
+                sleep_time = _min_interval - time_since_last
+                logger.info(f"[RATE_LIMIT] Ожидание {sleep_time:.2f}с для {func_name}")
+                time.sleep(sleep_time)
+        
+        _last_api_call[func_name] = time.time()
+        return func(*args, **kwargs)
+    return wrapper
 
 from utils.decode_etc20 import decode_erc20_input
 
@@ -677,6 +701,7 @@ def mark_pin_expired(pin_code: str, network: str = "TRC20") -> bool:
         print(f"❌ Ошибка при обновлении PIN-кода: {e}")
         return False
 
+@rate_limit_google_api
 def get_active_pins(network: str = "TRC20") -> list:
     """
     Получает все активные PIN-коды для мониторинга. Поддерживает разные порядок колонок, используя заголовки.
@@ -856,6 +881,7 @@ def get_phone_by_pin(pin_code: str, network: str = "TRC20") -> str:
         print(f"❌ Ошибка при получении номера телефона по PIN-коду: {e}")
         return ""
 
+@rate_limit_google_api
 def cleanup_expired_pins(network: str = "TRC20") -> int:
     """
     Очищает истекшие PIN-коды (помечает их как expired)

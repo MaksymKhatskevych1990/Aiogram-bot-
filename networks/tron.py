@@ -67,7 +67,11 @@ async def _get(session, url: str, params: dict, retries: int = 3) -> dict:
         try:
             headers = {}
             if TRONSCAN_API_KEY:
-                headers["TRON-PRO-API-KEY"] = TRONSCAN_API_KEY
+                # TronGrid использует другой заголовок
+                if "trongrid" in TRONSCAN_API.lower():
+                    headers["X-API-Key"] = TRONSCAN_API_KEY
+                else:
+                    headers["TRON-PRO-API-KEY"] = TRONSCAN_API_KEY
             async with session.get(url, params=params, headers=headers) as resp:
                 if resp.status >= 500:
                     logger.warning(f"[tron] Server error {resp.status}, retrying...")
@@ -239,11 +243,13 @@ async def get_recent_transactions(session, wallet_address: str, limit: int = 50)
         base = TRONSCAN_API.lower()
         # TronGrid
         if "trongrid" in base:
+            # Правильный endpoint для TronGrid API
             url = f"{TRONSCAN_API}/v1/accounts/{wallet_address}/transactions/trc20"
             params = {
                 "limit": limit,
                 "order_by": "block_timestamp,desc",
-                "contract_address": USDT_CONTRACT
+                "contract_address": USDT_CONTRACT,
+                "only_to": "true"  # Только входящие транзакции
             }
             data = await _get(session, url, params)
             if not data or "error" in data:
@@ -287,8 +293,15 @@ async def get_transaction_by_hash(session, tx_hash: str) -> Dict[str, Any]:
     Получает транзакцию по хешу
     """
     try:
-        url = f"{TRONSCAN_API}/wallet/gettransactionbyid"
-        params = {"value": tx_hash}
+        base = TRONSCAN_API.lower()
+        if "trongrid" in base:
+            # TronGrid endpoint
+            url = f"{TRONSCAN_API}/wallet/gettransactionbyid"
+            params = {"value": tx_hash}
+        else:
+            # TronScan endpoint  
+            url = f"{TRONSCAN_API}/api/transaction-info"
+            params = {"hash": tx_hash}
         
         data = await _get(session, url, params)
         
