@@ -1,31 +1,70 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.idea/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
 venv/
-client_secret_317694747647-tf1drt9g8v1s6p07t1d94jen11qa85ud.apps.googleusercon
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables
 .env
-*.sqlite3
-*.logtent.com.json
-client_secret_*.json
+.env.*
+!.env.example
+
+# Google credentials
 service_account.json
-client_secret.json
-.json/
-test_transaction.py
-test_gspread.py
-CASH_EXCHANGE_SETUP.md
-COMMISSION_SETUP.md
-COMMISSION_USAGE.md
+client_secret*.json
+*.json
+!requirements.txt
+!runtime.txt
+!package.json
+
+# Telethon sessions
+*.session
+*.session-journal
+
+# Celery
+celerybeat-schedule*
 dump.rdb
-nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
-nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC.pub
-promt.txt
-nUq9uDDIKsKs8QoEwVhMAAAAG2toYXRza2V2eWNoTWFrc3ltQGdtYWlsLmNvbQEC
-test_commission.py
-service_account.json
-start_bot.bat
-/docker-compose.yml
-/Dockerfile
+
+# QR codes (generated)
+qr_codes/*.png
+!qr_codes/.gitkeep
+
+# Logs
+*.log
+*.sqlite3
+
+# Test files
+test_*.py
+!test_transaction_save.py
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
 request_counter.txt
-.env
+promt.txt
+
+# Docker (if needed later)
+docker-compose.yml
+Dockerfile
+
+# Specific files to ignore
+start_bot.bat
+clean-repo/
