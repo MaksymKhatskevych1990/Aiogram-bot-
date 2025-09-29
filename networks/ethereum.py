@@ -44,10 +44,16 @@ class TxCode:
 def _ok(**extra):
     return {"success": True, "status": "confirmed", "code": TxCode.OK, **extra}
 
-def _pending(code, stage_left, **extra):
+def _pending(code, stage_left=None, **extra):
+    # Поддержка вызовов с именованным аргументом stage
+    if stage_left is None:
+        stage_left = extra.pop("stage", ["pending"]) or ["pending"]
     return {"success": False, "status": "pending", "code": code, "stage": stage_left, **extra}
 
-def _failed(code, stage_left, **extra):
+def _failed(code, stage_left=None, **extra):
+    # Поддержка вызовов с именованным аргументом stage
+    if stage_left is None:
+        stage_left = extra.pop("stage", ["failed"]) or ["failed"]
     return {"success": False, "status": "failed", "code": code, "stage": stage_left, **extra}
 
 def _expired(stage_left, **extra):
@@ -66,6 +72,14 @@ async def _client_session():
     finally:
         await session.close()
         logger.info(f"[ethereum] Closed------ ClientSession {session_id}")
+
+async def get_client_session():
+    """
+    Возвращает aiohttp.ClientSession с таймаутом для использования в мониторинге.
+    Внимание: вызывающая сторона отвечает за закрытие сессии.
+    """
+    timeout = aiohttp.ClientTimeout(total=10)
+    return aiohttp.ClientSession(timeout=timeout)
 
 async def _get(session, params, retries=3):
     last_err = None
@@ -444,12 +458,51 @@ async def get_recent_erc20_transactions(session, wallet_address: str, limit: int
             "apikey": ETHERSCAN_API_KEY
         }
         
-        data = await _get(session, params)
+        # Попытка 1: Etherscan V2 API
+        attempts = 3
+        data = None
+        for i in range(attempts):
+            v2_params = {
+                **params,
+                # для V2 меняется только базовый путь и требуется chainid
+                # базовый URL оставляем прежним, но добавим флаг для _get через полный путь
+            }
+            try:
+                # вручную формируем URL V2, т.к. ETHERSCAN_URL указывает на v1
+                from yarl import URL
+                v2_url = str(URL(ETHERSCAN_URL).with_path("/v2/api"))
+                async with session.get(v2_url, params={**v2_params, "chainid": 1, "module": "account", "action": "tokentx"}) as resp:
+                    v2_json = await resp.json()
+                if v2_json and v2_json.get("status") != "0":
+                    data = v2_json
+                    break
+                msg = (v2_json or {}).get("message", "NOTOK")
+                logger.warning(f"[ethereum] V2 account.tokentx NOTOK (try {i+1}/{attempts}): {msg} | {v2_json.get('result')}")
+                await asyncio.sleep(1.2 * (i + 1))
+            except Exception as _:
+                await asyncio.sleep(0.8 * (i + 1))
+
+        # Попытка 2: откат к V1, если V2 не вернула результат
+        if data is None:
+            for i in range(attempts):
+                data = await _get(session, params)
+                if data and data.get("status") != "0":
+                    break
+                msg = (data or {}).get("message", "NOTOK")
+                res = (data or {}).get("result", "")
+                logger.warning(f"[ethereum] V1 account.tokentx NOTOK (try {i+1}/{attempts}): {msg} | {res}")
+                await asyncio.sleep(1.5 * (i + 1))
         
-        if not data or data.get("status") == "0":
-            error = data.get("message", "Ошибка получения транзакций")
-            logger.error(f"[ethereum] Ошибка получения транзакций: {error}")
-            return _failed(TxCode.API_ERROR, stage=["api_error"], error=error)
+        if not data:
+            return _failed(TxCode.API_ERROR, stage=["api_error"], error="empty_response")
+        
+        if data.get("status") == "0":
+            msg = data.get("message", "NOTOK")
+            # 'No transactions found' – это не ошибка
+            if "No transactions" in (msg or ""):
+                return {"success": True, "data": []}
+            logger.error(f"[ethereum] Ошибка получения транзакций: {msg} | {data.get('result')}")
+            return _failed(TxCode.API_ERROR, stage=["api_error"], error=msg)
         
         transactions = data.get("result", [])
         logger.info(f"[ethereum] Получено {len(transactions)} ERC20 транзакций")
@@ -591,7 +644,16 @@ async def monitor_erc20_wallet_for_new_transactions(session, wallet_address: str
             # Проверяем каждую транзакцию против активных PIN-кодов
             for pin_data in active_pins:
                 pin_code = pin_data.get("pin_code")
-                expected_amount = float(pin_data.get("amount", 0).replace(",", ""))
+                raw_amount = str(pin_data.get("amount", "0")).strip()
+                raw_amount = raw_amount.replace(" ", "")
+                if "," in raw_amount and "." not in raw_amount:
+                    raw_amount = raw_amount.replace(",", ".")
+                else:
+                    raw_amount = raw_amount.replace(",", "")
+                try:
+                    expected_amount = float(raw_amount)
+                except ValueError:
+                    expected_amount = 0.0
                 
                 if not pin_code or expected_amount <= 0:
                     continue

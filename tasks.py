@@ -424,7 +424,8 @@ def monitor_active_pins():
     """
     try:
         from google_utils import get_active_pins, mark_pin_used, cleanup_expired_pins
-        from networks.tron import monitor_wallet_for_new_transactions, get_client_session
+        from networks.tron import monitor_wallet_for_new_transactions, _client_session as tron_client_session
+        from networks.ethereum import monitor_erc20_wallet_for_new_transactions, get_client_session as get_eth_session
         from google_utils import get_wallet_address
         from handlers.crypto import send_telegram_notification
         
@@ -482,19 +483,21 @@ def monitor_active_pins():
         for network, wallets in pins_by_network.items():
             for wallet_address, pins in wallets.items():
                 try:
-                    logger.info(f"[PIN_MONITOR] Мониторим {wallet_address} ({network}) - {len(pins)} PIN-кодов")
+                    logger.info(
+                        f"[PIN_MONITOR] Начало мониторинга. Network={network}, Wallet={wallet_address}, PIN_count={len(pins)}"
+                    )
                     
                     # Для TRC20 используем TronScan API
                     if network == "TRC20":
+                        logger.info(f"[PIN_MONITOR] TRC20 monitor call → wallet={wallet_address}")
                         # Получаем сессию и запускаем мониторинг
                         async def monitor_with_session():
-                            session = await get_client_session()
-                            return await monitor_wallet_for_new_transactions(
-                                session=session,
-                                wallet_address=wallet_address,
-                                active_pins=pins
-                            )
-                        
+                            async with tron_client_session() as session:
+                                return await monitor_wallet_for_new_transactions(
+                                    session=session,
+                                    wallet_address=wallet_address,
+                                    active_pins=pins
+                                )
                         result = run_async_coroutine(monitor_with_session())
                         
                         if result.get("success"):
@@ -538,9 +541,83 @@ def monitor_active_pins():
                         else:
                             logger.warning(f"[PIN_MONITOR] Ошибка мониторинга {wallet_address}: {result.get('error')}")
                     
-                    # Для ERC20 пока пропускаем (можно добавить позже)
+                    # Для ERC20 используем Etherscan API
                     elif network == "ERC20":
-                        logger.info(f"[PIN_MONITOR] ERC20 мониторинг пока не реализован для {wallet_address}")
+                        logger.info(f"[PIN_MONITOR] ERC20 monitor call → wallet={wallet_address}")
+                        async def monitor_with_session_eth():
+                            session = await get_eth_session()
+                            try:
+                                return await monitor_erc20_wallet_for_new_transactions(
+                                    session=session,
+                                    wallet_address=wallet_address,
+                                    active_pins=pins
+                                )
+                            finally:
+                                await session.close()
+
+                        result = run_async_coroutine(monitor_with_session_eth())
+
+                        if result.get("success"):
+                            matched_transactions = result.get("matched_transactions", [])
+                            logger.info(f"[PIN_MONITOR] ERC20 результат мониторинга: success, найдено совпадений: {len(matched_transactions)} для {wallet_address}")
+                            for match in matched_transactions:
+                                tx_hash = match["tx_hash"]
+                                pin_data = match["pin_data"]
+                                transaction_data = match["transaction_data"]
+
+                                pin_code = pin_data.get("pin_code")
+                                user_id = pin_data.get("user_id")
+
+                                logger.info(
+                                    f"[PIN_MONITOR] ERC20 match: tx_hash={tx_hash}, pin={pin_code}, user_id={user_id}, "
+                                    f"amount={transaction_data.get('amount')}, status={transaction_data.get('status')}, "
+                                    f"to={transaction_data.get('to_address')}, from={transaction_data.get('from_address')}"
+                                )
+
+                                # Записываем хеш: сначала пытаемся обновить строку PIN
+                                logger.info(f"[PIN_MONITOR] ERC20 пытаемся пометить PIN={pin_code} как used и записать hash в колонку J")
+                                used_ok = mark_pin_used(pin_code, tx_hash, network)
+                                logger.info(f"[PIN_MONITOR] ERC20 mark_pin_used result: {used_ok}")
+
+                                # Если строка PIN не найдена/не обновлена – добавим отдельную запись в ERC-лист
+                                if not used_ok:
+                                    try:
+                                        kyiv_tz = ZoneInfo("Europe/Kyiv")
+                                        now = datetime.now(kyiv_tz).strftime("%d.%m.%Y %H:%M:%S")
+                                        google_params = [
+                                            pin_data.get("user_id", ""),                # username
+                                            tx_hash,                                       # tx_hash
+                                            wallet_address,                                # target_address
+                                            transaction_data.get("timestamp", "N/A"),    # timestamp (из блокчейна)
+                                            now,                                           # now (время записи)
+                                            transaction_data.get("status", "pending"),   # status
+                                            str(transaction_data.get("amount", "")),     # amount
+                                            "",                                           # error
+                                            pin_data.get("phone", "")                   # phone
+                                        ]
+                                        logger.info(f"[PIN_MONITOR] ERC20 fallback: пробуем save_transaction_hash для tx={tx_hash}, pin={pin_code}")
+                                        saved = save_transaction_hash(google_params, network)
+                                        logger.info(f"[PIN_MONITOR] ERC20 fallback save_transaction_hash result: {saved}")
+                                    except Exception as e:
+                                        logger.warning(f"[PIN_MONITOR] ERC20 fallback запись хеша не удалась: {e}")
+
+                                tx_status = transaction_data.get("status", "pending")
+
+                                if tx_status == "confirmed":
+                                    msg = {
+                                        "msg_status": "tx_confirmed",
+                                        "lang": "ru",
+                                        "amount_result": transaction_data.get("amount", "N/A"),
+                                        "target_address": wallet_address,
+                                        "timestamp": transaction_data.get("timestamp", "N/A"),
+                                    }
+                                    chat_id = pin_data.get("chat_id")
+                                    if chat_id:
+                                        run_async_coroutine(send_telegram_notification(chat_id, msg))
+                                else:
+                                    logger.info(f"[PIN_MONITOR] ERC20 транзакция {tx_hash} найдена для PIN {pin_code}, статус: {tx_status}")
+                        else:
+                            logger.warning(f"[PIN_MONITOR] ERC20 ошибка мониторинга {wallet_address}: {result.get('error')}")
                 
                 except Exception as e:
                     logger.error(f"[PIN_MONITOR] Ошибка мониторинга {wallet_address}: {e}")

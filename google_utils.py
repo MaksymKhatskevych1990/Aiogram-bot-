@@ -679,7 +679,7 @@ def mark_pin_expired(pin_code: str, network: str = "TRC20") -> bool:
 
 def get_active_pins(network: str = "TRC20") -> list:
     """
-    Получает все активные PIN-коды для мониторинга
+    Получает все активные PIN-коды для мониторинга. Поддерживает разные порядок колонок, используя заголовки.
     """
     try:
         scope = [
@@ -688,92 +688,81 @@ def get_active_pins(network: str = "TRC20") -> list:
         ]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
         client = gspread.authorize(creds)
-        
-        # Выбираем правильный лист в зависимости от сети
+
         if network == "ERC20":
             sheet_name = 'Отслеживание транзакции ERC'
         else:
             sheet_name = 'Отслеживание транзакций TRC'
-            
+
         sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet(sheet_name)
-        
-        # Получаем все записи (начиная со второй строки, так как первая - заголовки)
         all_values = sheet.get_all_values()
         if len(all_values) < 2:
             return []
-        
-        # Пропускаем заголовки (первая строка)
+
+        headers = [h.strip().lower() for h in all_values[0]]
+
+        def col(*names):
+            for n in names:
+                n = n.strip().lower()
+                if n in headers:
+                    return headers.index(n)
+            return -1
+
+        # Общие индексы по наименованию колонок
+        idx_pin = col('pin - code', 'pin-code', 'pin', 'pin_code')
+        idx_addr = col('адрес для перевода', 'адрес кошелька', 'address', 'to')
+        idx_user_wallet = col('кошелек пользователя', 'кошелёк пользователя', 'user wallet', 'from')
+        idx_amount = col('сумма', 'сумма usd', 'amount')
+        idx_network = col('сеть', 'network')
+        idx_created = col('время создания', 'created_at')
+        idx_expires = col('время истечения', 'expires_at')
+        idx_status = col('статус', 'status')
+        idx_hash = col('tx_hash', 'tx hash', 'hash')
+        idx_user_id = col('id пользователя', 'user id', 'userid')
+        idx_phone = col('номер телефона', 'phone')
+        idx_chat = col('chat id', 'chat_id')
+
         data_rows = all_values[1:]
-        active_pins = []
-        
+        active_pins: list[dict] = []
+
         for row in data_rows:
-            if network == "ERC20":
-                if len(row) < 13:  # ERC таблица имеет 13 колонок (как TRC)
-                    continue
-                    
-                # Структура ERC таблицы ИДЕНТИЧНА TRC: A: Сумма USDT, B: Кошелек пользователя, C: PIN-code, D: Адрес для перевода, 
-                # E: Сеть, F: Сумма, G: Время создания, H: Время истечения, I: Статус, J: tx_hash, 
-                # K: Id пользователя, L: Номер телефона, M: Chat ID
-                record = {
-                    'amount': row[0],           # A: Сумма USDT
-                    'user_wallet': row[1],      # B: Кошелек пользователя
-                    'pin_code': row[2],         # C: PIN-код
-                    'target_wallet': row[3],    # D: Адрес для перевода
-                    'network': row[4],          # E: Сеть
-                    'amount_duplicate': row[5], # F: Сумма (дублируем amount)
-                    'created_at': row[6],       # G: Время создания
-                    'expires_at': row[7],       # H: Время истечения
-                    'status': row[8],           # I: Статус
-                    'tx_hash': row[9],          # J: tx_hash
-                    'user_id': row[10],         # K: Id пользователя
-                    'phone': row[11],           # L: Номер телефона
-                    'chat_id': row[12] if len(row) > 12 else ''  # M: Chat ID
-                }
-            else:
-                if len(row) < 12:  # TRC таблица имеет 13 колонок
-                    continue
-                    
-                # Структура TRC таблицы: A: Сумма USDT, B: Кошелек пользователя, C: PIN-code, D: Адрес для перевода, 
-                # E: Сеть, F: Сумма, G: Время создания, H: Время истечения, I: Статус, J: tx_hash, 
-                # K: Id пользователя, L: Номер телефона, M: Chat ID
-                record = {
-                    'amount': row[0],           # A: Сумма USDT
-                    'user_wallet': row[1],      # B: Кошелек пользователя
-                    'pin_code': row[2],         # C: PIN-код
-                    'target_wallet': row[3],     # D: Адрес для перевода
-                    'network': row[4],          # E: Сеть
-                    'amount_duplicate': row[5],  # F: Сумма (дубликат)
-                    'created_at': row[6],       # G: Время создания
-                    'expires_at': row[7],       # H: Время истечения
-                    'status': row[8],           # I: Статус
-                    'tx_hash': row[9],          # J: tx_hash
-                    'user_id': row[10],         # K: Id пользователя
-                    'phone': row[11],           # L: Номер телефона
-                    'chat_id': row[12] if len(row) > 12 else ''  # M: Chat ID (не дублируем user_id)
-                }
-            
-            if record.get('status') == 'active':
-                if network == "ERC20":
-                    # В ERC таблице нет поля expires_at, просто добавляем активные PIN-коды
-                    active_pins.append(record)
-                else:
-                    # В TRC таблице проверяем срок действия
-                    expires_str = record.get('expires_at')
-                    if expires_str:
-                        try:
-                            expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S")
-                            if datetime.now() <= expires_at:
-                                active_pins.append(record)
-                            else:
-                                # Помечаем как истекший
-                                mark_pin_expired(record.get('pin_code'), network)
-                        except ValueError:
-                            pass
-                    else:
+            # защита от коротких строк
+            if not any(row):
+                continue
+
+            def val(i):
+                return row[i] if i >= 0 and i < len(row) else ''
+
+            record = {
+                'pin_code': val(idx_pin),
+                'target_wallet': val(idx_addr),
+                'user_wallet': val(idx_user_wallet),
+                'amount': val(idx_amount),
+                'network': val(idx_network),
+                'created_at': val(idx_created),
+                'expires_at': val(idx_expires),
+                'status': val(idx_status),
+                'tx_hash': val(idx_hash),
+                'user_id': val(idx_user_id),
+                'phone': val(idx_phone),
+                'chat_id': val(idx_chat),
+            }
+
+            if (record.get('status') or '').strip().lower() == 'active':
+                if network == 'TRC20' and record.get('expires_at'):
+                    try:
+                        expires_at = datetime.strptime(record['expires_at'], "%Y-%m-%d %H:%M:%S")
+                        if datetime.now() <= expires_at:
+                            active_pins.append(record)
+                        else:
+                            mark_pin_expired(record.get('pin_code'), network)
+                    except ValueError:
                         active_pins.append(record)
-        
+                else:
+                    active_pins.append(record)
+
         return active_pins
-        
+
     except Exception as e:
         print(f"❌ Ошибка при получении активных PIN-кодов: {e}")
         return []

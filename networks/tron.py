@@ -6,7 +6,7 @@ import json
 import re
 from typing import Optional, Dict, Any
 
-from config import TRONSCAN_API, TRC20_CONFIRMATIONS, USDT_TRC20_CONTRACT, logger
+from config import TRONSCAN_API, TRC20_CONFIRMATIONS, USDT_TRC20_CONTRACT, TRONSCAN_API_KEY, logger
 from utils.extract_hash_in_url import extract_tx_hash
 
 
@@ -52,12 +52,23 @@ async def _client_session():
         logger.info(f"[tron] Closed------ ClientSession {session_id}")
         await session.close()
 
+async def get_client_session():
+    """
+    Возвращает aiohttp.ClientSession с таймаутом для использования в мониторинге.
+    Внимание: вызывающая сторона отвечает за закрытие сессии.
+    """
+    timeout = aiohttp.ClientTimeout(total=10)
+    return aiohttp.ClientSession(timeout=timeout)
+
 
 async def _get(session, url: str, params: dict, retries: int = 3) -> dict:
     last_err = None
     for i in range(retries):
         try:
-            async with session.get(url, params=params) as resp:
+            headers = {}
+            if TRONSCAN_API_KEY:
+                headers["TRON-PRO-API-KEY"] = TRONSCAN_API_KEY
+            async with session.get(url, params=params, headers=headers) as resp:
                 if resp.status >= 500:
                     logger.warning(f"[tron] Server error {resp.status}, retrying...")
                     continue
@@ -74,17 +85,38 @@ async def _get(session, url: str, params: dict, retries: int = 3) -> dict:
 
 
 async def fetch_transaction(session, tx_hash: str) -> Dict[str, Any]:
-    """Получает транзакцию из Tronscan API"""
-    url = f"{TRONSCAN_API}/wallet/gettransactionbyid"
-    params = {"value": tx_hash}
-    data = await _get(session, url, params)
+    """Получает транзакцию по хешу из TronGrid или TronScan (в зависимости от TRONSCAN_API)."""
+    base = TRONSCAN_API.lower()
+    # Ветка TronGrid
+    if "trongrid" in base:
+        url = f"{TRONSCAN_API}/wallet/gettransactionbyid"
+        params = {"value": tx_hash}
+        data = await _get(session, url, params)
+        if not data or "error" in data:
+            return _failed(TxCode.API_ERROR, error=data.get("error", "Ошибка API"))
+        if data.get("confirmed") is not True:
+            return _pending(TxCode.NOT_CONFIRMED, error="Транзакция не подтверждена")
+        return {"success": True, "data": data}
 
+    # Ветка TronScan (apilist.tronscanapi.com)
+    url = f"{TRONSCAN_API}/api/transaction-info"
+    params = {"hash": tx_hash}
+    data = await _get(session, url, params)
     if not data or "error" in data:
         return _failed(TxCode.API_ERROR, error=data.get("error", "Ошибка API"))
-
-    if data.get("confirmed") is not True:
+    # Приведем формат к единому виду: добавим поля для совместимости
+    # TronScan возвращает tokenTransferInfo (объект)
+    tti = data.get("tokenTransferInfo") or {}
+    data.setdefault("trc20TransferInfo", [{
+        "contract_address": tti.get("contract_address"),
+        "to_address": tti.get("to_address"),
+        "from_address": tti.get("from_address"),
+        "amount_str": str(tti.get("amount_str", "0")),
+        "decimals": tti.get("decimals", 6)
+    }])
+    # Условно подтверждено, если confirmed==True или блок есть
+    if not data.get("confirmed", True):
         return _pending(TxCode.NOT_CONFIRMED, error="Транзакция не подтверждена")
-
     return {"success": True, "data": data}
 
 
@@ -202,27 +234,50 @@ async def check_tron_transaction(user_input: str, target_address: str) -> Dict[s
 # =============================================================================
 
 async def get_recent_transactions(session, wallet_address: str, limit: int = 50) -> Dict[str, Any]:
-    """
-    Получает последние ВХОДЯЩИЕ TRC20 транзакции для указанного адреса кошелька
-    """
+    """Получает последние входящие TRC20 USDT для кошелька из TronGrid или TronScan."""
     try:
-        url = f"{TRONSCAN_API}/v1/accounts/{wallet_address}/transactions/trc20"
+        base = TRONSCAN_API.lower()
+        # TronGrid
+        if "trongrid" in base:
+            url = f"{TRONSCAN_API}/v1/accounts/{wallet_address}/transactions/trc20"
+            params = {
+                "limit": limit,
+                "order_by": "block_timestamp,desc",
+                "contract_address": USDT_CONTRACT
+            }
+            data = await _get(session, url, params)
+            if not data or "error" in data:
+                return _failed(TxCode.API_ERROR, error=data.get("error", "Ошибка получения транзакций"))
+            transactions = data.get("data", [])
+            logger.info(f"[tron] Получено {len(transactions)} транзакций от TronGrid API")
+            return {"success": True, "data": {"data": transactions}}
+
+        # TronScan
+        url = f"{TRONSCAN_API}/api/token_trc20/transfers"
         params = {
+            "toAddress": wallet_address,
             "limit": limit,
-            "order_by": "block_timestamp,desc"
+            "contract": USDT_CONTRACT,
+            "start": 0,
+            "sort": "desc"
         }
-        
         data = await _get(session, url, params)
-        
         if not data or "error" in data:
             return _failed(TxCode.API_ERROR, error=data.get("error", "Ошибка получения транзакций"))
-        
-        # TronGrid API возвращает данные в поле "data"
-        transactions = data.get("data", [])
-        logger.info(f"[tron] Получено {len(transactions)} транзакций от TronGrid API")
-        
-        return {"success": True, "data": {"data": transactions}}
-        
+        items = data.get("token_transfers") or data.get("data") or []
+        # Приведем к единому формату, похожему на TronGrid
+        normalized = []
+        for it in items:
+            normalized.append({
+                "transaction_id": it.get("transaction_id") or it.get("hash"),
+                "to": it.get("to_address") or it.get("to"),
+                "from": it.get("from_address") or it.get("from"),
+                "value": int(it.get("quant", it.get("amount", it.get("value", 0)))) if str(it.get("quant", "")).isdigit() else int(it.get("amount_str", it.get("value", 0)) or 0),
+                "token_info": {"decimals": it.get("decimals", 6)},
+                "block_timestamp": it.get("block_ts") or it.get("timestamp") or 0
+            })
+        logger.info(f"[tron] Получено {len(normalized)} транзакций от TronScan API")
+        return {"success": True, "data": {"data": normalized}}
     except Exception as e:
         logger.error(f"[tron] Ошибка получения транзакций: {e}")
         return _failed(TxCode.INTERNAL_ERROR, error=str(e))
@@ -362,14 +417,36 @@ async def monitor_wallet_for_new_transactions(session, wallet_address: str,
             # Проверяем каждую транзакцию против активных PIN-кодов
             for pin_data in active_pins:
                 pin_code = pin_data.get("pin_code")
-                expected_amount = float(pin_data.get("amount", 0).replace(",", ""))
+                raw_amount = str(pin_data.get("amount", "0")).strip()
+                # Надёжный парсер суммы: поддержка запятой и точки
+                cleaned = raw_amount.replace(" ", "")
+                if "," in cleaned and "." not in cleaned:
+                    cleaned = cleaned.replace(",", ".")
+                else:
+                    cleaned = cleaned.replace(",", "")
+                try:
+                    expected_amount = float(cleaned)
+                except Exception:
+                    try:
+                        expected_amount = float(str(raw_amount).replace(",", ""))
+                    except Exception:
+                        expected_amount = 0.0
                 
                 if not pin_code or expected_amount <= 0:
                     continue
                 
                 # Проверяем, что это TRC20 транзакция к нашему адресу
                 if tx.get("to") != wallet_address:
+                    # подробный лог для диагностики несовпадения адреса
+                    logger.info(f"[tron] skip: to={tx.get('to')} != wallet={wallet_address}")
                     continue
+
+                # Если в PIN есть кошелек пользователя, проверяем отправителя
+                expected_from = (pin_data.get("user_wallet") or "").strip()
+                if expected_from:
+                    if tx.get("from") != expected_from:
+                        logger.info(f"[tron] skip: from={tx.get('from')} != expected_from={expected_from}")
+                        continue
                 
                 # Проверяем сумму
                 tx_value = int(tx.get("value", 0))
@@ -379,6 +456,7 @@ async def monitor_wallet_for_new_transactions(session, wallet_address: str,
                 logger.info(f"[tron] Проверяем сумму: {tx_amount} vs ожидаемая: {expected_amount}")
                 
                 if abs(tx_amount - expected_amount) > 0.01:
+                    logger.info(f"[tron] skip: amount mismatch tx_amount={tx_amount} expected={expected_amount}")
                     continue
                 
                 logger.info(f"[tron] Найдена соответствующая транзакция: {tx_hash} для PIN {pin_code}")

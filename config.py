@@ -31,7 +31,7 @@ BSCSCAN_API_KEY = os.getenv('BSCSCAN_API_KEY')
 # TRONSCAN не требует API ключа для базовых запросов
 
 TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
-TRONSCAN_API = os.getenv('TRONSCAN_API', 'https://api.trongrid.io')
+TRONSCAN_API = os.getenv('TRONSCAN_API', 'https://apilist.tronscanapi.com')
 ERC20_CONFIRMATIONS = int(os.getenv('ERC20_CONFIRMATIONS', '12'))
 ETHERSCAN_API = os.getenv('ETHERSCAN_API', 'https://api.etherscan.io/api')
 
