@@ -67,3 +67,4 @@ Dockerfile
 
 # Specific files to ignore
 start_bot.bat
+clean-repo/
