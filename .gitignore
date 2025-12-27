@@ -63,7 +63,7 @@ promt.txt
 
 # Docker (if needed later)
 docker-compose.yml
-Dockerfile
+
 
 # Specific files to ignore
 start_bot.bat

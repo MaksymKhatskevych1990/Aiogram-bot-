@@ -2,6 +2,9 @@ import asyncio
 import aiohttp
 import csv
 import os
+import sys
+import argparse
+import logging
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
@@ -11,30 +14,54 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis as AsyncRedis  # важно: async вариант
 
-from config import TOKEN, GOOGLE_API_KEY, CSV_URL, REDIS_URL, REDIS_DB_FSM
+from config import GOOGLE_API_KEY, CSV_URL, REDIS_URL, REDIS_DB_FSM, logger
 from handlers.cash import register_cash_handlers
 from handlers.crypto import register_crypto_handlers
 from handlers.start import register_start_handlers
 from utils.channel_rates import ChannelRatesParser
 
-# Проверяем переменные окружения для Railway
-if not TOKEN:
-    raise ValueError("BOT_TOKEN не установлен! Установите переменную BOT_TOKEN в Railway.")
+# Получаем токен из аргументов командной строки или из переменной окружения
+def get_bot_token():
+    """Получает токен бота из аргументов командной строки или переменной окружения"""
+    parser = argparse.ArgumentParser(description='Запуск Telegram бота')
+    parser.add_argument('--token', type=str, help='Токен бота Telegram')
+    args, unknown = parser.parse_known_args()
+    
+    # Сначала проверяем аргумент командной строки
+    if args.token:
+        return args.token
+    
+    # Затем проверяем переменную окружения (для обратной совместимости)
+    token = os.getenv('BOT_TOKEN') or os.getenv('TOKEN')
+    if token:
+        return token
+    
+    raise ValueError("BOT_TOKEN не установлен! Укажите токен через --token или переменную окружения BOT_TOKEN.")
+
+# Получаем токен
+BOT_TOKEN = get_bot_token()
+
+# Сохраняем токен в config для использования в других модулях
+from config import set_current_bot_token
+set_current_bot_token(BOT_TOKEN)
 
 if not REDIS_URL:
     raise ValueError("REDIS_URL не установлен! Установите переменную REDIS_URL в Railway.")
 
-print(f"🔧 Конфигурация:")
-print(f"   - Redis URL: {REDIS_URL}")
-print(f"   - Redis DB FSM: {REDIS_DB_FSM}")
-print(f"   - Environment: {os.getenv('ENVIRONMENT', 'development')}")
+logger.info("🔧 Конфигурация:")
+# Безопасность: не логируем полный Redis URL с паролем
+redis_host = REDIS_URL.split('@')[-1].split(':')[0] if REDIS_URL and '@' in REDIS_URL else 'localhost'
+logger.info(f"   - Redis Host: {redis_host}")
+logger.info(f"   - Redis DB FSM: {REDIS_DB_FSM}")
+logger.info(f"   - Environment: {os.getenv('ENVIRONMENT', 'development')}")
+logger.info(f"   - Bot Token: {BOT_TOKEN[:10]}..." if BOT_TOKEN else "   - Bot Token: не установлен")
 
 # Use in-memory storage instead of Redis
 # storage = MemoryStorage()
 redis_fsm = AsyncRedis.from_url(REDIS_URL, db=REDIS_DB_FSM)
 storage = RedisStorage(redis=redis_fsm)
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=storage)
 google = GOOGLE_API_KEY
 
@@ -56,36 +83,36 @@ async def main():
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         register_all_handlers(dp)
-        print("🤖 Бот запущен...")
-        print(f"🌍 Environment: {os.getenv('ENVIRONMENT', 'development')}")
-        print(f"🔗 Redis: {REDIS_URL}")
+        logger.info("🤖 Бот запущен...")
+        logger.info(f"🌍 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+        logger.debug(f"🔗 Redis: {REDIS_URL}")
         
         # Для Railway - используем webhook или polling
         if os.getenv('ENVIRONMENT') == 'production':
-            print("🚂 Запуск в production режиме (Railway)")
+            logger.info("🚂 Запуск в production режиме (Railway)")
             # На Railway лучше использовать polling для простоты
             await dp.start_polling(bot)
         else:
-            print("💻 Запуск в development режиме")
+            logger.info("💻 Запуск в development режиме")
             await dp.start_polling(bot)
             
     except Exception as e:
         if "Conflict: terminated by other getUpdates request" in str(e):
-            print("❌ Ошибка: Уже запущен другой экземпляр бота!")
-            print("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
+            logger.error("❌ Ошибка: Уже запущен другой экземпляр бота!")
+            logger.info("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
         else:
-            print(f"❌ Ошибка запуска бота: {e}")
+            logger.error(f"❌ Ошибка запуска бота: {e}", exc_info=True)
             raise e
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print('👋 Бот остановлен')
+        logger.info('👋 Бот остановлен')
     except Exception as e:
         if "Conflict: terminated by other getUpdates request" in str(e):
-            print("❌ Ошибка: Уже запущен другой экземпляр бота!")
-            print("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
+            logger.error("❌ Ошибка: Уже запущен другой экземпляр бота!")
+            logger.info("💡 Решение: Остановите все другие экземпляры бота и попробуйте снова.")
         else:
-            print(f'❌ Критическая ошибка: {e}')
+            logger.critical(f'❌ Критическая ошибка: {e}', exc_info=True)
             raise e

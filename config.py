@@ -1,20 +1,42 @@
 import logging
 import os
+from typing import Optional
 from dotenv import load_dotenv
 
 # Загружаем переменные из .env (для локальной разработки)
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
+# Настройка уровня логирования в зависимости от окружения
+environment = os.getenv('ENVIRONMENT', 'development')
+if environment == 'production':
+    logger.setLevel(logging.INFO)
+else:
+    logger.setLevel(logging.DEBUG)
 
 # Чтобы логи выводились в консоль
 console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
 
 # Конфигурация бота
+# TOKEN теперь передается через аргументы командной строки в main.py
+# Оставляем для обратной совместимости со старым кодом
 TOKEN = os.getenv('BOT_TOKEN') or os.getenv('TOKEN')
+
+# Глобальная переменная для хранения текущего токена бота (устанавливается в main.py)
+_current_bot_token: Optional[str] = None
+
+def set_current_bot_token(token: str):
+    """Устанавливает текущий токен бота (вызывается из main.py)"""
+    global _current_bot_token
+    _current_bot_token = token
+
+def get_current_bot_token() -> Optional[str]:
+    """Получает текущий токен бота"""
+    global _current_bot_token
+    return _current_bot_token or TOKEN
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 # URL для получения курсов валют
@@ -31,7 +53,8 @@ BSCSCAN_API_KEY = os.getenv('BSCSCAN_API_KEY')
 # TRONSCAN не требует API ключа для базовых запросов
 
 TRC20_CONFIRMATIONS = int(os.getenv('TRC20_CONFIRMATIONS', '12'))
-TRONSCAN_API = os.getenv('TRONSCAN_API', 'https://apilist.tronscanapi.com')
+# По умолчанию используем TronGrid (если не указан другой API)
+TRONSCAN_API = os.getenv('TRONSCAN_API', 'https://api.trongrid.io')
 ERC20_CONFIRMATIONS = int(os.getenv('ERC20_CONFIRMATIONS', '12'))
 ETHERSCAN_API = os.getenv('ETHERSCAN_API', 'https://api.etherscan.io/api')
 
@@ -96,6 +119,10 @@ ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')  # Замените на реальн
 TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID')            # укажи свой api_id с my.telegram.org
 TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH')         # укажи свой api_hash с my.telegram.org
 TELETHON_SESSION = os.getenv('TELETHON_SESSION')  # имя файла сессии (создастся после логина)
+
+# Backend API для интеграции
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000')
+BOT_API_KEY = os.getenv('BOT_API_KEY', '')  # API ключ для аутентификации в backend
 
 GOOGLE_CREDENTIALS  = {
     "type": os.getenv("GOOGLE_TYPE"),

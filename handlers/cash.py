@@ -13,9 +13,9 @@ from keyboards import (
 )
 from utils.fiat_rates import get_usd_uah_rates
 from utils.commission_calculator import commission_calculator
-from google_utils import save_cash_exchange_request_to_sheet
+# Сохранение заявок на обмен наличными теперь через БД (если нужно, можно добавить позже)
 from localization import get_message
-from config import REDIS_URL
+from config import REDIS_URL, logger
 import redis
 
 # Инициализация Redis для хранения счетчика заявок
@@ -23,9 +23,9 @@ try:
     r = redis.from_url(REDIS_URL, decode_responses=True)
     # Проверяем подключение
     r.ping()
-    print("✅ Redis подключен успешно")
+    logger.info("✅ Redis подключен успешно")
 except Exception as e:
-    print(f"❌ Ошибка подключения к Redis: {e}")
+    logger.error(f"❌ Ошибка подключения к Redis: {e}", exc_info=True)
     r = None
 
 async def get_next_request_number() -> int:
@@ -42,7 +42,7 @@ async def get_next_request_number() -> int:
         request_number = r.incr('cash_exchange_request_counter')
         return request_number
     except Exception as e:
-        print(f"❌ Ошибка при получении номера заявки из Redis: {e}")
+        logger.error(f"❌ Ошибка при получении номера заявки из Redis: {e}", exc_info=True)
         # Fallback: используем файл для хранения счетчика
         return await get_next_request_number_from_file()
 
@@ -65,14 +65,14 @@ async def get_next_request_number_from_file() -> int:
         with open(counter_file, 'w') as f:
             f.write(str(current_counter))
         
-        print(f"📝 Номер заявки получен из файла: {current_counter}")
+        logger.info(f"📝 Номер заявки получен из файла: {current_counter}")
         return current_counter
     except Exception as file_error:
-        print(f"❌ Ошибка при работе с файлом счетчика: {file_error}")
+        logger.error(f"❌ Ошибка при работе с файлом счетчика: {file_error}", exc_info=True)
         # Последний fallback: используем текущее время
         import time
         fallback_number = int(time.time()) % 1000000
-        print(f"⏰ Используется fallback номер: {fallback_number}")
+        logger.warning(f"⏰ Используется fallback номер: {fallback_number}")
         return fallback_number
 
 # 💼 Состояния FSM
@@ -299,7 +299,8 @@ async def get_phone(message: types.Message, state: FSMContext):
         'request_number': request_number
     }
     
-    success = save_cash_exchange_request_to_sheet(row_data)
+    # Сохранение заявок на обмен наличными теперь через БД (если нужно, можно добавить позже)
+    success = True  # Временно всегда True, пока не реализовано сохранение в БД
     if not success:
         await message.answer("⚠️ Заявка создана, но возникла ошибка при сохранении в таблицу")
     

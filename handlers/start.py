@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.state import StatesGroup, State
 from keyboards import get_language_keyboard, get_action_keyboard, get_start_keyboard
-from config import LOGO_PATH, CSV_URL
+from config import LOGO_PATH, CSV_URL, logger
 from localization import get_message
 from utils.fiat_rates import get_all_currency_rates
 import aiohttp
@@ -35,7 +35,7 @@ async def handle_start_button(message: types.Message, state: FSMContext):
         photo = types.FSInputFile(LOGO_PATH)
         await message.answer_photo(photo, caption=get_message("greeting", "ru"))
     except Exception as e:
-        print(f"Ошибка при отправке логотипа: {e}")
+        logger.error(f"Ошибка при отправке логотипа: {e}", exc_info=True)
         await message.answer(get_message("greeting", "ru"))
 
     # Просим выбрать язык
@@ -185,7 +185,7 @@ async def show_current_rates(message: types.Message, state: FSMContext):
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
         
     except Exception as e:
-        print(f"Ошибка при получении курсов: {e}")
+        logger.error(f"Ошибка при получении курсов: {e}", exc_info=True)
         await message.answer(get_message("currency_rates_error", lang))
         await message.answer(get_message("choose_action", lang), reply_markup=get_action_keyboard(lang))
 

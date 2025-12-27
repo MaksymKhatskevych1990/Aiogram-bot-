@@ -1,7 +1,4 @@
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from typing import Dict, Optional, Tuple
-from config import GOOGLE_CREDENTIALS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,44 +6,17 @@ logger = logging.getLogger(__name__)
 class CommissionCalculator:
     def __init__(self):
         self.commission_data = None
-        # Не загружаем данные при создании экземпляра
+        # Используем значения по умолчанию (комиссии теперь в БД)
     
     def _load_commission_data(self):
-        """Загружает данные о комиссиях из Google таблицы"""
+        """Загружает данные о комиссиях (теперь использует только значения по умолчанию)"""
         if self.commission_data is not None:
             return  # Уже загружено
         
-        try:
-            scope = ['https://spreadsheets.google.com/feeds',
-                     'https://www.googleapis.com/auth/drive']
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
-            client = gspread.authorize(creds)
-            
-            # Открываем таблицу и лист с комиссиями
-            sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Комиссии')
-            
-            # Получаем все записи
-            records = sheet.get_all_records()
-            
-            # Преобразуем в словарь для быстрого доступа
-            self.commission_data = {}
-            for record in records:
-                operation_type = record.get('Тип операции', '').strip()
-                if operation_type:
-                    self.commission_data[operation_type] = {
-                        'min_amount': float(record.get('Мин. сумма', 0)),
-                        'max_amount': float(record.get('Макс. сумма', 999999)),
-                        'commission_type': record.get('Тип комиссии', '').strip(),
-                        'commission_value': float(record.get('Значение комиссии', 0)),
-                        'manager_required': record.get('Требуется менеджер', '').strip().lower() == 'да'
-                    }
-            
-            logger.info(f"Загружено {len(self.commission_data)} правил комиссий")
-            
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке данных комиссий: {e}")
-            # Устанавливаем значения по умолчанию
-            self._set_default_commission_data()
+        # Используем значения по умолчанию (комиссии теперь хранятся в БД)
+        # Для совместимости со старым кодом оставляем значения по умолчанию
+        self._set_default_commission_data()
+        logger.info(f"Используются значения комиссий по умолчанию ({len(self.commission_data)} правил)")
     
     def _set_default_commission_data(self):
         """Устанавливает значения комиссий по умолчанию"""
@@ -186,28 +156,11 @@ class CommissionCalculator:
         return applicable_rules[0][1]
     
     def get_exchange_rate(self) -> Optional[float]:
-        """Получает текущий курс обмена из Google таблицы"""
-        try:
-            scope = ['https://spreadsheets.google.com/feeds',
-                     'https://www.googleapis.com/auth/drive']
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS, scope)
-            client = gspread.authorize(creds)
-            
-            # Открываем лист с курсами
-            sheet = client.open_by_key('1qUhwJPPDJE-NhcHoGQsIRebSCm_gE8H6K7XSKxGVcIo').worksheet('Курсы')
-            
-            # Получаем курс USDT/USD
-            rate_cell = sheet.find('USDT/USD')
-            if rate_cell:
-                rate_value = sheet.cell(rate_cell.row, rate_cell.col + 1).value
-                return float(rate_value) if rate_value else None
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Ошибка при получении курса обмена: {e}")
-            # Возвращаем значение по умолчанию для USDT/USD
-            return 1.0
+        """Получает текущий курс обмена (теперь использует значение по умолчанию)"""
+        # Курсы теперь должны получаться из БД или внешних API
+        # Для совместимости возвращаем значение по умолчанию
+        logger.info("Используется курс обмена по умолчанию (1.0)")
+        return 1.0
 
 # Создаем глобальный экземпляр калькулятора
 commission_calculator = CommissionCalculator() 

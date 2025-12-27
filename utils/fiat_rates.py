@@ -32,7 +32,7 @@ async def get_usd_uah_rates(wholesale: bool = False) -> Tuple[Optional[float], O
                 r = usd_data[key]
                 return r["buy"], r["sell"]
         except Exception as e:
-            print(f"Ошибка при получении курса USD из канала: {e}")
+            logger.error(f"Ошибка при получении курса USD из канала: {e}", exc_info=True)
 
     # Fallback на CSV (только retail)
     return await _get_usd_from_csv()
@@ -45,7 +45,7 @@ async def _get_usd_from_csv() -> Tuple[float, float]:
             logger.info(f"[fiat_rates] ===================================Created ClientSession {session_id}")
             async with session.get(CSV_URL) as resp:
                 if resp.status != 200:
-                    print(f"CSV недоступен, статус {resp.status}")
+                    logger.warning(f"CSV недоступен, статус {resp.status}")
                     return 38.50, 38.80
                 text_data = await resp.text()
                 rows = list(csv.reader(text_data.splitlines()))
@@ -61,7 +61,7 @@ async def _get_usd_from_csv() -> Tuple[float, float]:
                         except Exception:
                             return 38.50, 38.80
     except Exception as e:
-        print(f"Ошибка при получении USD из CSV: {e}")
+        logger.error(f"Ошибка при получении USD из CSV: {e}", exc_info=True)
     return 38.50, 38.80
 
 
@@ -82,7 +82,7 @@ async def get_all_currency_rates(wholesale: bool = False) -> Dict[str, Dict[str,
             if rates:
                 return rates
         except Exception as e:
-            print(f"Ошибка при получении курсов из канала: {e}")
+            logger.error(f"Ошибка при получении курсов из канала: {e}", exc_info=True)
 
     # Fallback на CSV (только retail)
     return await _get_all_from_csv()
@@ -108,7 +108,7 @@ async def _get_all_from_csv() -> Dict[str, Dict[str, float]]:
                         if cur in ("USD", "EUR", "GBP", "PLN"):
                             rates[f"{cur}-UAH"] = {"buy": buy, "sell": sell}
     except Exception as e:
-        print(f"Ошибка при получении курсов из CSV: {e}")
+        logger.error(f"Ошибка при получении курсов из CSV: {e}", exc_info=True)
 
     if not rates:
         rates = {

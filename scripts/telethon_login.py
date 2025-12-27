@@ -40,9 +40,9 @@ from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
 
 async def main():
-    print("=== 📲 Авторизация в Telegram через Telethon ===")
-    print(f" API ID: {config.TELEGRAM_API_ID}")
-    print(f"🔑 API Hash: {config.TELEGRAM_API_HASH[:10]}...")
+    logger.info("=== 📲 Авторизация в Telegram через Telethon ===")
+    logger.info(f" API ID: {config.TELEGRAM_API_ID}")
+    logger.debug(f"🔑 API Hash: {config.TELEGRAM_API_HASH[:10]}...")
     
     # Создаем клиент с дополнительными параметрами для Windows
     client = TelegramClient(
@@ -64,9 +64,9 @@ async def main():
         if await client.is_user_authorized():
             me = await client.get_me()
             logger.info("✅ Авторизация прошла успешно!")
-            print(f"👋 Зашли как: {me.first_name} (@{me.username})")
-            print(f"📞 Номер телефона: {me.phone}")
-            print(f"✅ Сессия сохранена в: {SESSION_FILE}")
+            logger.info(f"👋 Зашли как: {me.first_name} (@{me.username})")
+            logger.info(f"📞 Номер телефона: {me.phone}")
+            logger.info(f"✅ Сессия сохранена в: {SESSION_FILE}")
         else:
             logger.info("📱 Требуется авторизация...")
             print(" Введите номер телефона (включая код страны, например: +380501234567):")
@@ -88,8 +88,8 @@ async def main():
                     logger.info("✅ Вход выполнен успешно!")
                     
                     me = await client.get_me()
-                    print(f"👋 Добро пожаловать, {me.first_name}!")
-                    print(f"✅ Сессия сохранена в: {SESSION_FILE}")
+                    logger.info(f"👋 Добро пожаловать, {me.first_name}!")
+                    logger.info(f"✅ Сессия сохранена в: {SESSION_FILE}")
                     
                 except SessionPasswordNeededError:
                     print("🔒 Введите пароль двухфакторной аутентификации:")
@@ -102,7 +102,7 @@ async def main():
                     return
                     
             except Exception as e:
-                logger.error(f"❌ Ошибка при авторизации: {e}")
+                logger.error(f"❌ Ошибка при авторизации: {e}", exc_info=True)
                 print(f"Ошибка: {e}")
                 
     except Exception as e:
@@ -110,11 +110,11 @@ async def main():
         print(f"Ошибка: {e}")
         
         # Дополнительная диагностика для Windows
-        print("\n🔍 Диагностика для Windows:")
-        print("1. Проверьте, не блокирует ли антивирус соединения")
-        print("2. Попробуйте отключить Windows Defender Firewall")
-        print("3. Проверьте настройки прокси в системе")
-        print("4. Убедитесь, что время на компьютере синхронизировано")
+        logger.info("\n🔍 Диагностика для Windows:")
+        logger.info("1. Проверьте, не блокирует ли антивирус соединения")
+        logger.info("2. Попробуйте отключить Windows Defender Firewall")
+        logger.info("3. Проверьте настройки прокси в системе")
+        logger.info("4. Убедитесь, что время на компьютере синхронизировано")
         
     finally:
         try:
@@ -124,13 +124,13 @@ async def main():
 
 if __name__ == "__main__":
     # Проверяем версию Python и SSL
-    print(f"🐍 Python версия: {sys.version}")
-    print(f"🔒 SSL версия: {ssl.OPENSSL_VERSION}")
+    logger.info(f"🐍 Python версия: {sys.version}")
+    logger.info(f"🔒 SSL версия: {ssl.OPENSSL_VERSION}")
     
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n⏹️ Прервано пользователем")
+        logger.info("\n⏹️ Прервано пользователем")
     except Exception as e:
         logger.exception("❌ Критическая ошибка")
         print(f"Критическая ошибка: {e}")

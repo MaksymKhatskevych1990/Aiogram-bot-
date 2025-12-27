@@ -1,5 +1,6 @@
 import re
 import redis
+from redis.asyncio import Redis as AsyncRedis
 import json
 import logging
 from typing import Dict, Optional, Tuple
@@ -40,8 +41,8 @@ class ChannelRatesParser:
             TELEGRAM_API_HASH
         )
 
-        # Redis
-        self.redis_client = redis.Redis.from_url(
+        # Redis (асинхронный клиент)
+        self.redis_client = AsyncRedis.from_url(
             REDIS_URL, 
             db=REDIS_DB,
             decode_responses=True,
@@ -52,13 +53,13 @@ class ChannelRatesParser:
     async def get_latest_rates(self) -> Dict[str, Dict]:
         """Получить актуальные курсы с кэшем в Redis."""
         try:
-            cached_rates = self.redis_client.get('currency_rates')
+            cached_rates = await self.redis_client.get('currency_rates')
             if cached_rates:
                 return json.loads(cached_rates)
 
             rates = await self._parse_channel_rates()
             if rates:
-                self.redis_client.setex('currency_rates', self.cache_ttl, json.dumps(rates))
+                await self.redis_client.setex('currency_rates', self.cache_ttl, json.dumps(rates))
                 return rates
 
             return self._get_default_rates()
@@ -134,10 +135,10 @@ class ChannelRatesParser:
             'PLN-UAH': {'retail': {'buy': 9.80, 'sell': 9.95}}
         }
 
-    def get_specific_rate(self, currency_pair: str) -> Optional[Tuple[float, float]]:
+    async def get_specific_rate(self, currency_pair: str) -> Optional[Tuple[float, float]]:
         """Получить розничный курс по конкретной валютной паре."""
         try:
-            rates = self.redis_client.get('currency_rates')
+            rates = await self.redis_client.get('currency_rates')
             if rates:
                 rd = json.loads(rates).get(currency_pair, {}).get("retail")
                 if rd:
@@ -149,7 +150,7 @@ class ChannelRatesParser:
 
     async def force_refresh_rates(self) -> Dict[str, Dict]:
         """Принудительное обновление курсов."""
-        self.redis_client.delete('currency_rates')
+        await self.redis_client.delete('currency_rates')
         return await self.get_latest_rates()
 
 

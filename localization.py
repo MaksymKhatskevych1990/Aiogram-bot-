@@ -357,9 +357,9 @@ MESSAGES = {
     
     # НОВЫЕ СООБЩЕНИЯ ДЛЯ PIN-СИСТЕМЫ
     "enter_user_wallet": {
-        "ru": "🏦 Введите адрес вашего кошелька для безопасности транзакции:",
-        "ua": "🏦 Введіть адресу вашого гаманця для безпеки транзакції:",
-        "en": "🏦 Enter your wallet address for transaction security:"
+        "ru": "🏦 Введите адрес вашего ЛИЧНОГО кошелька, на который вы хотите получить средства после продажи USDT:\n\n⚠️ Это должен быть ваш личный адрес, а НЕ адрес бота!",
+        "ua": "🏦 Введіть адресу вашого ОСОБИСТОГО гаманця, на який ви хочете отримати кошти після продажу USDT:\n\n⚠️ Це має бути ваша особиста адреса, а НЕ адреса бота!",
+        "en": "🏦 Enter your PERSONAL wallet address where you want to receive funds after selling USDT:\n\n⚠️ This should be your personal address, NOT the bot's address!"
     },
     "invalid_wallet_format": {
         "ru": "❌ Неверный формат адреса кошелька для сети {network}. Пожалуйста, введите корректный адрес.",
@@ -367,9 +367,9 @@ MESSAGES = {
         "en": "❌ Invalid wallet address format for {network} network. Please enter a correct address."
     },
     "cannot_use_bot_wallet": {
-        "ru": "❌ Вы не можете использовать адрес бота. Введите адрес вашего личного кошелька.",
-        "ua": "❌ Ви не можете використовувати адресу бота. Введіть адресу вашого особистого гаманця.",
-        "en": "❌ You cannot use the bot's address. Please enter your personal wallet address."
+        "ru": "❌ Вы ввели адрес кошелька бота (адрес для приема платежей).\n\nПожалуйста, введите адрес вашего ЛИЧНОГО кошелька, на который вы хотите получить средства после продажи USDT.",
+        "ua": "❌ Ви ввели адресу гаманця бота (адресу для прийому платежів).\n\nБудь ласка, введіть адресу вашого ОСОБИСТОГО гаманця, на який ви хочете отримати кошти після продажу USDT.",
+        "en": "❌ You entered the bot's wallet address (payment receiving address).\n\nPlease enter your PERSONAL wallet address where you want to receive funds after selling USDT."
     },
     "pin_generation_error": {
         "ru": "❌ Ошибка генерации PIN-кода. Попробуйте еще раз.",
